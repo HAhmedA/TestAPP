@@ -1,0 +1,133 @@
+
+body {
+  margin: 0;
+  background: #f7f8fa;
+  font-family: 'Inter', 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: #23282c;
+}
+
+.sjs-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+
+.sjs-app__header {
+  background: linear-gradient(90deg, #19b394 0%, #50b390 100%);
+  box-shadow: 0 2px 8px rgba(30,143,255,0.08);
+  padding: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.sjs-app__header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 32px;
+}
+
+.sjs-app__logo-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.sjs-app__logo {
+  height: 48px;
+  margin-right: 12px;
+}
+
+.sjs-nav-button {
+  display: inline-block;
+  margin-left: 24px;
+  font-weight: 600;
+  font-size: 18px;
+  text-decoration: none;
+  line-height: 40px;
+  color: #fff;
+  padding: 0 8px;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.sjs-nav-button:hover,
+.sjs-nav-button.active {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  text-decoration: none;
+}
+
+.sjs-app__content {
+  flex: 1 1 auto;
+  max-width: 1200px;
+  margin: 32px auto 0 auto;
+  width: 100%;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 16px rgba(30,143,255,0.06);
+  padding: 32px 24px 40px 24px;
+  min-height: 500px;
+}
+
+.sjs-app__footer {
+  background: #23282c;
+  color: #fff;
+  padding: 0;
+}
+
+.sjs-app__footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 32px;
+  text-align: center;
+  font-size: 15px;
+  letter-spacing: 0.2px;
+}
+
+
+h1 {
+  padding-left: 24px;
+}
+
+.sjs-client-app__content--about h1,
+.sjs-client-app__content--surveys-list h1 {
+  padding: 0;
+}
+
+.sjs-client-app__content--surveys-list,
+.sjs-client-app__content--about {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.sjs-editor-container {
+  position: fixed;
+  left: 0;
+  width: 100%;
+  top: 70px;
+  height: calc(100% - 130px);
+}
+
+.sjs-results-container {
+  height: calc(100% - 88px);
+}
+
+.sjs-results-content {
+  height: 100%;
+}
+
+.sjs-results-placeholder {
+  line-height: 200px;
+  text-align: center;
+  border: 1px dotted lightgray;
+}
+
+.sa-commercial {
+  box-sizing: border-box;
+}

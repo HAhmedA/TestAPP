@@ -1,0 +1,59 @@
+services:
+  web:
+    # React app built to static files and served via nginx
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Frontend calls the backend on localhost for the user’s browser
+        REACT_APP_API_BASE: "http://localhost:8080/api"
+        REACT_APP_ENABLE_MSW: "false"
+    ports:
+      - "3000:80" # expose the web app on localhost:3000
+    depends_on:
+      - backend
+
+  backend:
+    # Express API with session auth and Postgres persistence
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - SESSION_SECRET=dev-secret
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=postgres
+      - PGPASSWORD=password
+      - PGDATABASE=postgres
+    ports:
+      - "8080:8080" # expose the API on localhost:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    # Postgres 18 with init SQL; mounts at /var/lib/postgresql per 18+ images
+    build:
+      context: /Users/heshama/Downloads/surveyjs-nodejs-postgresql-master/postgres
+      dockerfile: Dockerfile
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=postgres
+    ports:
+      - "5433:5432" # forward host 5433 to container 5432
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+networks:
+  default:
+    name: survey-net # shared network so services can resolve each other by name
+
+volumes:
+  pgdata: # persistent database storage (kept across container restarts)
+

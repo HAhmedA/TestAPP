@@ -1,0 +1,21 @@
+# Git & editors
+.git
+.gitignore
+*.swp
+*.log
+.DS_Store
+
+# Node / build artifacts
+node_modules
+build
+coverage
+.cache
+
+# Local env/config
+.env
+.env.*
+
+# Docker
+**/.dockerignore
+**/Dockerfile*
+
