@@ -33,9 +33,7 @@ services:
 
   postgres:
     # Postgres 18 with init SQL; mounts at /var/lib/postgresql per 18+ images
-    build:
-      context: /Users/heshama/Downloads/surveyjs-nodejs-postgresql-master/postgres
-      dockerfile: Dockerfile
+    image: postgres:18
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
@@ -43,6 +41,7 @@ services:
     ports:
       - "5433:5432" # forward host 5433 to container 5432
     volumes:
+      - ./postgres/initdb:/docker-entrypoint-initdb.d # mount init SQL scripts
       - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
