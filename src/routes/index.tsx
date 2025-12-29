@@ -7,6 +7,7 @@ import Results from "../pages/Results"
 import Login from "../pages/Login"
 import Register from "../pages/Register"
 import MoodHistory from "../pages/MoodHistory"
+import Profile from "../pages/Profile"
 import RequireAdmin from "../components/RequireAdmin"
 import RequireAuth from "../components/RequireAuth"
 import { useReduxDispatch, useReduxSelector } from '../redux'
@@ -16,17 +17,19 @@ export const NavBar = () => {
     const user = useReduxSelector(state => state.auth.user)
     const dispatch = useReduxDispatch()
     return (
-        <>
-            {user && <NavLink className='sjs-nav-button sjs-nav-button-orange' to="/"><span>Home</span></NavLink>}
-            {user && (
-                <>
-                    <span className='sjs-nav-button' style={{ cursor: 'default', color: '#ffffff' }}>
-                        Hello, {user.name || user.email}
-                    </span>
-                    <span className='sjs-nav-button sjs-nav-button-orange' onClick={() => dispatch(logout())}><span>Logout</span></span>
-                </>
-            )}
-        </>
+        <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+                {user && <NavLink className='sjs-nav-button sjs-nav-button-gold' to="/"><span>Home</span></NavLink>}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+                {user && (
+                    <>
+                        <NavLink className='sjs-nav-button sjs-nav-button-gold sjs-nav-button-grouped' to="/profile"><span>Profile</span></NavLink>
+                        <span className='sjs-nav-button sjs-nav-button-gold sjs-nav-button-grouped' onClick={() => dispatch(logout())}><span>Logout</span></span>
+                    </>
+                )}
+            </div>
+        </div>
     )
 }
 
@@ -42,6 +45,7 @@ const Content = (): React.ReactElement => (
             <Route path="/edit/:id" element={<RequireAuth><RequireAdmin><Edit/></RequireAdmin></RequireAuth>}></Route>
             <Route path="/results/:id" element={<RequireAuth><RequireAdmin><Results/></RequireAdmin></RequireAuth>}></Route>
             <Route path="/mood-history/:id" element={<RequireAuth><MoodHistory/></RequireAuth>}></Route>
+            <Route path="/profile" element={<RequireAuth><Profile/></RequireAuth>}></Route>
             <Route element={<NoMatch/>}></Route>
         </Routes>
     </>

@@ -6,6 +6,7 @@ import { get } from '../redux/surveys'
 import { Model } from 'survey-core'
 import { Survey } from 'survey-react-ui'
 import 'survey-core/survey-core.css'
+import './Run.css'
 
 const Run = () => {
     const dispatch = useReduxDispatch()
@@ -67,6 +68,12 @@ const Run = () => {
     }, [dispatch, id, navigate])
 
     return (<>
+        <button 
+            className='run-back-button' 
+            onClick={() => navigate('/')}
+        >
+            ← Back
+        </button>
         {surveyData === null && <div>Loading...</div>}
         {surveyData === undefined && <div>Survey not found</div>}
         {!!surveyData && !!surveyModel && !surveyModel.title && <>

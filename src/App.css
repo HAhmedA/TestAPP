@@ -45,7 +45,7 @@ body {
 
 .sjs-nav-button {
   display: inline-block;
-  margin-left: 24px;
+  margin-left: 0;
   font-weight: 600;
   font-size: 18px;
   text-decoration: none;
@@ -63,12 +63,30 @@ body {
   text-decoration: none;
 }
 
-.sjs-nav-button-orange {
-  color: #ffd700 !important;
+.sjs-nav-button-gold {
+  background: #ffd700 !important;
+  color: #871807 !important;
+  padding: 1px 16px !important;
+  border-radius: 4px;
 }
 
-.sjs-nav-button-orange:hover {
-  color: #ffd700 !important;
+.sjs-nav-button-gold:hover,
+.sjs-nav-button-gold.active {
+  background: #ffed4e !important;
+  color: #871807 !important;
+  text-decoration: none;
+}
+
+.sjs-nav-button-gold span {
+  color: #871807 !important;
+}
+
+.sjs-nav-button-grouped {
+  margin-left: 12px !important;
+}
+
+.sjs-nav-button-gold:first-child {
+  margin-left: 0 !important;
 }
 
 .sjs-app__content {

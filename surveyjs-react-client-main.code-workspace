@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../surveyjs-nodejs-postgresql-master/postgres"
+		}
+	],
+	"settings": {}
+}

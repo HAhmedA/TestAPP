@@ -1,0 +1,187 @@
+.profile-wrapper {
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  background: #f7f8fa;
+  padding: 32px 24px;
+}
+
+.profile-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.profile-back {
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  color: #111827;
+  cursor: pointer;
+  margin-bottom: 24px;
+  transition: all 0.2s;
+}
+
+.profile-back:hover {
+  background: #F9FAFB;
+  border-color: #D1D5DB;
+}
+
+.profile-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 32px 0;
+}
+
+.profile-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.profile-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profile-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.profile-select {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 16px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  background: white;
+  color: #111827;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.profile-select:hover {
+  border-color: #9CA3AF;
+}
+
+.profile-select:focus {
+  outline: none;
+  border-color: #850b0b;
+  box-shadow: 0 0 0 3px rgba(133, 11, 11, 0.1);
+}
+
+.profile-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.profile-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: #374151;
+  cursor: pointer;
+  user-select: none;
+}
+
+.profile-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #850b0b;
+}
+
+.profile-disabilities-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 8px;
+  max-height: 600px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.profile-disability-category {
+  padding: 16px;
+  background: #F9FAFB;
+  border-radius: 8px;
+  border: 1px solid #E5E7EB;
+}
+
+.profile-disability-category-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 12px 0;
+}
+
+.profile-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid #E5E7EB;
+}
+
+.profile-submit-button {
+  background: #850b0b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.profile-submit-button:hover {
+  background: #a00e0e;
+  transform: translateY(-1px);
+}
+
+.profile-submit-button:active {
+  transform: translateY(0);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .profile-wrapper {
+    padding: 24px 16px;
+  }
+  
+  .profile-title {
+    font-size: 24px;
+  }
+  
+  .profile-content {
+    padding: 16px;
+  }
+
+  .profile-form {
+    gap: 24px;
+  }
+
+  .profile-checkbox-group {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .profile-disabilities-container {
+    max-height: 500px;
+  }
+}
+

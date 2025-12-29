@@ -5,8 +5,8 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        # Frontend calls the backend on localhost for the user's browser
-        REACT_APP_API_BASE: "http://localhost:8080/api"
+        # Frontend calls backend via same-origin proxy (/api -> backend:8080)
+        REACT_APP_API_BASE: "/api"
     ports:
       - "3000:80" # expose the web app on localhost:3000
     depends_on:

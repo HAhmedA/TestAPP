@@ -61,3 +61,33 @@ export const loadStudentMoodHistory = createAsyncThunk(
     return response.data as MoodHistoryData
   }
 )
+
+export interface Annotation {
+  constructName: string
+  constructTitle: string
+  annotationText: string
+  statistics: {
+    average: number
+    min: number
+    max: number
+    count: number
+    trend: {
+      type: string
+      description: string
+      level?: string | null
+    }
+  }
+}
+
+export interface AnnotationsData {
+  period: string
+  annotations: Annotation[]
+}
+
+export const loadAnnotations = createAsyncThunk(
+  'results/loadAnnotations',
+  async ({ surveyId, period }: { surveyId: string; period: 'today' | '7days' }) => {
+    const response = await axios.get(`${apiBaseAddress}/annotations?surveyId=${surveyId}&period=${period}`)
+    return response.data as AnnotationsData
+  }
+)

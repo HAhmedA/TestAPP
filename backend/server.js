@@ -12,6 +12,7 @@ import { body, validationResult } from 'express-validator'
 import { v4 as uuidv4 } from 'uuid'
 import pkg from 'pg'
 const { Pool } = pkg
+import { AnnotationsService } from './annotations.js'
 
 const app = express()
 // Let Express trust reverse proxy headers; important for cookies behind Docker
@@ -41,18 +42,23 @@ app.options('*', cors(corsOptions))
 app.use(express.json())
 // Postgres-backed session store
 const PgSession = connectPgSimple(session)
+const isProduction = process.env.NODE_ENV === 'production'
 app.use(session({
   store: new PgSession({
     pool,
     tableName: 'session',
-    createTableIfMissing: false
+    // Ensure session table exists if missing
+    createTableIfMissing: true
   }),
   secret: process.env.SESSION_SECRET || 'dev-secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    sameSite: 'lax'
+    sameSite: 'lax',
+    secure: isProduction, // allow HTTP locally, secure in production
+    // Keep users logged in across refreshes (30 days)
+    maxAge: 1000 * 60 * 60 * 24 * 30
   }
 }))
 
@@ -117,6 +123,133 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   res.json(req.session.user || null)
+})
+
+// User profile endpoints
+app.get('/api/profile', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'unauthorized' })
+    }
+
+    const { rows } = await pool.query(
+      'SELECT * FROM public.user_profiles WHERE user_id = $1',
+      [userId]
+    )
+
+    if (rows.length === 0) {
+      return res.json(null) // No profile yet
+    }
+
+    const profile = rows[0]
+    res.json({
+      userId: profile.user_id,
+      eduLevel: profile.edu_level,
+      fieldOfStudy: profile.field_of_study,
+      major: profile.major,
+      learningFormats: profile.learning_formats || [],
+      disabilities: profile.disabilities || {},
+      createdAt: profile.created_at,
+      updatedAt: profile.updated_at
+    })
+  } catch (e) {
+    console.error('Profile fetch error:', e)
+    res.status(500).json({ error: 'db_error', details: String(e) })
+  }
+})
+
+app.post('/api/profile', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'unauthorized' })
+    }
+
+    const { eduLevel, fieldOfStudy, major, learningFormats, disabilities } = req.body
+
+    // Validate learning_formats is an array if provided
+    let learningFormatsJson = null
+    if (learningFormats && Array.isArray(learningFormats)) {
+      learningFormatsJson = JSON.stringify(learningFormats)
+    }
+
+    // Validate disabilities - convert array to structured format by category
+    let disabilitiesJson = null
+    if (disabilities) {
+      if (typeof disabilities === 'object' && !Array.isArray(disabilities)) {
+        // Already in structured format
+        disabilitiesJson = JSON.stringify(disabilities)
+      } else if (Array.isArray(disabilities) && disabilities.length > 0) {
+        // Convert flat array to structured format by category
+        const structuredDisabilities = {}
+        const disabilityCategories = {
+          'Reading Disabilities': ['Dyslexia', 'Hyperlexia', 'Visual Processing Disorder'],
+          'Writing Disabilities': ['Dysgraphia', 'Written Expression Disorder', 'Motor Coordination Disorder'],
+          'Mathematics Disabilities': ['Dyscalculia', 'Math Reasoning Disorder', 'Number Processing Disorder'],
+          'Attention & Focus Disorders': ['Attention Deficit Disorder (ADD)', 'Attention Deficit Hyperactivity Disorder (ADHD)', 'Executive Function Disorder'],
+          'Language & Communication Disorders': ['Auditory Processing Disorder (APD)', 'Expressive Language Disorder', 'Receptive Language Disorder'],
+          'Memory & Cognitive Processing Disorders': ['Working Memory Deficit', 'Slow Processing Speed', 'Nonverbal Learning Disability (NVLD)'],
+          'Autism Spectrum-Related Learning Differences': ['High-Functioning Autism', 'Asperger\'s Syndrome', 'Social Communication Disorder'],
+          'Generalized Learning Disorders': ['Specific Learning Disorder (SLD)', 'Global Developmental Delay', 'Mild Cognitive Impairment']
+        }
+        
+        // Group disabilities by category
+        disabilities.forEach(disability => {
+          for (const [category, items] of Object.entries(disabilityCategories)) {
+            if (items.includes(disability)) {
+              if (!structuredDisabilities[category]) {
+                structuredDisabilities[category] = []
+              }
+              structuredDisabilities[category].push(disability)
+              break
+            }
+          }
+        })
+        
+        disabilitiesJson = JSON.stringify(structuredDisabilities)
+      }
+    }
+
+    const query = `
+      INSERT INTO public.user_profiles 
+        (user_id, edu_level, field_of_study, major, learning_formats, disabilities, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, now(), now())
+      ON CONFLICT (user_id)
+      DO UPDATE SET
+        edu_level = EXCLUDED.edu_level,
+        field_of_study = EXCLUDED.field_of_study,
+        major = EXCLUDED.major,
+        learning_formats = EXCLUDED.learning_formats,
+        disabilities = EXCLUDED.disabilities,
+        updated_at = now()
+      RETURNING *
+    `
+
+    const result = await pool.query(query, [
+      userId,
+      eduLevel || null,
+      fieldOfStudy || null,
+      major || null,
+      learningFormatsJson,
+      disabilitiesJson
+    ])
+
+    const profile = result.rows[0]
+    res.json({
+      userId: profile.user_id,
+      eduLevel: profile.edu_level,
+      fieldOfStudy: profile.field_of_study,
+      major: profile.major,
+      learningFormats: profile.learning_formats || [],
+      disabilities: profile.disabilities || {},
+      createdAt: profile.created_at,
+      updatedAt: profile.updated_at
+    })
+  } catch (e) {
+    console.error('Profile save error:', e)
+    res.status(500).json({ error: 'db_error', details: String(e) })
+  }
 })
 
 const requireAuth = (req, res, next) => {
@@ -411,6 +544,29 @@ app.get('/api/student/mood', requireAuth, async (req, res) => {
       }
     })
 
+    // Generate and store annotations using the Annotations module
+    const annotationsService = new AnnotationsService(pool)
+    try {
+      // Delete old insufficient_data annotations first
+      await pool.query(
+        `DELETE FROM public.annotations 
+         WHERE user_id = $1 AND survey_id = $2 AND period = $3 
+         AND (annotation_text LIKE '%insufficient data%' OR statistics->'trend'->>'type' = 'insufficient_data')`,
+        [userId, surveyId, period]
+      )
+      
+      await annotationsService.generateAndStoreAnnotations(
+        userId,
+        surveyId,
+        period,
+        results,
+        constructs
+      )
+    } catch (annotationError) {
+      // Log but don't fail the request if annotation generation fails
+      console.error('Annotation generation error:', annotationError)
+    }
+
     res.json({
       period,
       constructs: constructStats,
@@ -554,6 +710,53 @@ app.get('/api/student/mood/history', requireAuth, async (req, res) => {
     })
   } catch (e) {
     console.error('Student mood history error:', e)
+    res.status(500).json({ error: 'db_error', details: String(e) })
+  }
+})
+
+// Annotations endpoint: get annotations for a user's survey results
+app.get('/api/annotations', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'unauthorized' })
+    }
+
+    const { surveyId, period } = req.query
+
+    if (!surveyId || !period) {
+      return res.status(400).json({ error: 'surveyId and period are required' })
+    }
+
+    if (period !== 'today' && period !== '7days') {
+      return res.status(400).json({ error: 'period must be "today" or "7days"' })
+    }
+
+    const annotationsService = new AnnotationsService(pool)
+    const annotations = await annotationsService.getAnnotations(userId, surveyId, period)
+
+    // Filter out any annotations with insufficient data (double-check)
+    const filteredAnnotations = annotations.filter(a => {
+      if (a.annotationText && a.annotationText.toLowerCase().includes('insufficient data')) {
+        return false
+      }
+      if (a.statistics && a.statistics.trend && a.statistics.trend.type === 'insufficient_data') {
+        return false
+      }
+      return true
+    })
+
+    res.json({
+      period,
+      annotations: filteredAnnotations.map(a => ({
+        constructName: a.constructName,
+        constructTitle: a.constructTitle,
+        annotationText: a.annotationText,
+        statistics: a.statistics
+      }))
+    })
+  } catch (e) {
+    console.error('Annotations fetch error:', e)
     res.status(500).json({ error: 'db_error', details: String(e) })
   }
 })

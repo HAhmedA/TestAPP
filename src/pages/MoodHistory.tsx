@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useReduxDispatch } from '../redux'
-import { loadStudentMoodHistory, MoodHistoryData } from '../redux/results'
+import { loadStudentMoodHistory, MoodHistoryData, loadAnnotations, AnnotationsData } from '../redux/results'
 import './MoodHistory.css'
 
 const MoodHistory = () => {
@@ -14,6 +14,7 @@ const MoodHistory = () => {
     
     const [historyData, setHistoryData] = useState<MoodHistoryData | null>(null)
     const [loading, setLoading] = useState(true)
+    const [annotations, setAnnotations] = useState<AnnotationsData | null>(null)
     
     useEffect(() => {
         if (id) {
@@ -26,6 +27,23 @@ const MoodHistory = () => {
                 .catch(() => {
                     setLoading(false)
                 })
+            
+            // Load annotations if period is 'today' or '7days'
+            if (period === 'today' || period === '7days') {
+                dispatch(loadAnnotations({ surveyId: id, period: period as 'today' | '7days' }))
+                    .then((result: any) => {
+                        if (result.type === 'results/loadAnnotations/fulfilled') {
+                            setAnnotations(result.payload)
+                        } else {
+                            setAnnotations(null)
+                        }
+                    })
+                    .catch(() => {
+                        setAnnotations(null)
+                    })
+            } else {
+                setAnnotations(null)
+            }
         }
     }, [id, period, dispatch])
     
@@ -149,6 +167,19 @@ const MoodHistory = () => {
                         return (
                             <div key={construct.name} className='mood-history-chart-container'>
                                 <h3 className='mood-history-chart-title'>{index + 1}. {formattedTitle}</h3>
+                                
+                                {/* Add annotation for this specific construct */}
+                                {annotations && annotations.annotations && annotations.annotations.length > 0 && (() => {
+                                    const constructAnnotation = annotations.annotations.find(
+                                        ann => ann.constructName === construct.name
+                                    )
+                                    return constructAnnotation ? (
+                                        <div className='mood-history-chart-annotation'>
+                                            {constructAnnotation.annotationText}
+                                        </div>
+                                    ) : null
+                                })()}
+                                
                                 <ResponsiveContainer width="100%" height={300}>
                                     <LineChart data={constructData}>
                                         <CartesianGrid strokeDasharray="3 3" />
