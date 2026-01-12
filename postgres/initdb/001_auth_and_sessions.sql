@@ -13,14 +13,14 @@ CREATE TABLE IF NOT EXISTS public.users (
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users (email);
 
--- Link results to users (each user can have many results)
-ALTER TABLE public.results
+-- Link questionnaire results to users (each user can have many questionnaire results)
+ALTER TABLE public.questionnaire_results
   ADD COLUMN IF NOT EXISTS user_id uuid NULL,
   ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
-  ADD CONSTRAINT fk_results_user FOREIGN KEY (user_id)
+  ADD CONSTRAINT fk_questionnaire_results_user FOREIGN KEY (user_id)
     REFERENCES public.users(id) ON DELETE SET NULL;
 
-CREATE INDEX IF NOT EXISTS idx_results_user ON public.results (user_id);
+CREATE INDEX IF NOT EXISTS idx_questionnaire_results_user ON public.questionnaire_results (user_id);
 
 -- express-session store using connect-pg-simple
 CREATE TABLE IF NOT EXISTS "session" (

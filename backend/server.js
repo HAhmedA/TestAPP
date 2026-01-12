@@ -1,7 +1,7 @@
 // Minimal Express backend used by the React client.
 // Responsibilities:
 // - Session-based auth for demo (admin/student)
-// - Survey CRUD persisted in Postgres (tables: public.surveys, public.results)
+// - Survey CRUD persisted in Postgres (tables: public.surveys, public.questionnaire_results)
 // - CORS configured for the frontend on http://localhost:3000
 import express from 'express'
 import cors from 'cors'
@@ -12,6 +12,7 @@ import { body, validationResult } from 'express-validator'
 import { v4 as uuidv4 } from 'uuid'
 import pkg from 'pg'
 const { Pool } = pkg
+import { saveResponses, computeAnnotations, getAnnotations, getAnnotationsForChatbot } from './services/annotationService.js'
 
 const app = express()
 // Let Express trust reverse proxy headers; important for cookies behind Docker
@@ -281,10 +282,10 @@ app.get('/api/results', async (req, res) => {
     const postId = req.query.postId
     // If logged in, prefer to scope by user
     if (req.session.user) {
-      const { rows } = await pool.query('SELECT id, postid, json FROM public.results WHERE postid = $1 AND user_id = $2', [postId, req.session.user.id])
+      const { rows } = await pool.query('SELECT id, postid, answers FROM public.questionnaire_results WHERE postid = $1 AND user_id = $2', [postId, req.session.user.id])
       return res.json(rows)
     }
-    const { rows } = await pool.query('SELECT id, postid, json FROM public.results WHERE postid = $1', [postId])
+    const { rows } = await pool.query('SELECT id, postid, answers FROM public.questionnaire_results WHERE postid = $1', [postId])
     return res.json(rows)
   } catch (e) {
     res.status(500).json({ error: 'db_error', details: String(e) })
@@ -296,9 +297,31 @@ app.post('/api/post', async (req, res) => {
     const { postId, surveyResult } = req.body || {}
     const id = uuidv4()
     const userId = req.session.user?.id || null
-    await pool.query('INSERT INTO public.results (id, postid, json, user_id, created_at) VALUES ($1, $2, $3::jsonb, $4, now())', [id, postId, JSON.stringify(surveyResult), userId])
+    const submittedAt = new Date()
+
+    // Save to questionnaire_results (JSONB backup)
+    await pool.query(
+      'INSERT INTO public.questionnaire_results (id, postid, answers, user_id, created_at) VALUES ($1, $2, $3::jsonb, $4, $5)',
+      [id, postId, JSON.stringify(surveyResult), userId, submittedAt]
+    )
+
+    // If user is logged in, save normalized responses and compute annotations
+    if (userId) {
+      // Save individual SRL responses to normalized table
+      await saveResponses(pool, id, userId, surveyResult, submittedAt)
+
+      // Get survey structure for computing annotations
+      const surveyQuery = await pool.query('SELECT json FROM public.surveys WHERE id = $1', [postId])
+      if (surveyQuery.rows[0]) {
+        const surveyStructure = surveyQuery.rows[0].json
+        // Compute and cache annotations for this user
+        await computeAnnotations(pool, userId, surveyStructure)
+      }
+    }
+
     res.json({ id, postId })
   } catch (e) {
+    console.error('Post submission error:', e)
     res.status(500).json({ error: 'db_error', details: String(e) })
   }
 })
@@ -351,7 +374,7 @@ app.get('/api/student/mood', requireAuth, async (req, res) => {
 
     // Get results for this user and survey
     const resultsQuery = await pool.query(
-      `SELECT id, json, created_at FROM public.results 
+      `SELECT id, answers, created_at FROM public.questionnaire_results 
        WHERE postid = $1 AND user_id = $2 ${dateFilter}
        ORDER BY created_at ASC`,
       [surveyId, userId]
@@ -360,7 +383,7 @@ app.get('/api/student/mood', requireAuth, async (req, res) => {
     const results = resultsQuery.rows.map(row => ({
       id: row.id,
       createdAt: row.created_at,
-      data: typeof row.json === 'string' ? JSON.parse(row.json) : row.json
+      data: typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
     }))
 
     if (results.length === 0) {
@@ -473,14 +496,14 @@ app.get('/api/student/mood/history', requireAuth, async (req, res) => {
 
     // Get all results for this user and survey
     const resultsQuery = await pool.query(
-      `SELECT id, json, created_at FROM public.results 
+      `SELECT id, answers, created_at FROM public.questionnaire_results 
        WHERE postid = $1 AND user_id = $2 ${dateFilter}
        ORDER BY created_at ASC`,
       [surveyId, userId]
     )
 
     const results = resultsQuery.rows.map(row => {
-      const data = typeof row.json === 'string' ? JSON.parse(row.json) : row.json
+      const data = typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
       const date = new Date(row.created_at)
       const dateStr = date.toISOString().split('T')[0] // YYYY-MM-DD
       const timeStr = date.toTimeString().split(' ')[0].substring(0, 5) // HH:MM
@@ -576,11 +599,11 @@ app.get('/api/results/dashboard/:surveyId', async (req, res) => {
     const survey = surveyResult.rows[0]
 
     // Get all results for this survey (admin sees all, not filtered by user)
-    const resultsQuery = await pool.query('SELECT id, json, user_id FROM public.results WHERE postid = $1', [surveyId])
+    const resultsQuery = await pool.query('SELECT id, answers, user_id FROM public.questionnaire_results WHERE postid = $1', [surveyId])
     const results = resultsQuery.rows.map(row => ({
       id: row.id,
       userId: row.user_id,
-      data: typeof row.json === 'string' ? JSON.parse(row.json) : row.json
+      data: typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers
     }))
 
     // Extract questions from survey structure
@@ -806,6 +829,43 @@ app.put('/api/admin/system-prompt', requireAdmin, async (req, res) => {
     res.json(rows[0])
   } catch (e) {
     console.error('Update system prompt error:', e)
+    res.status(500).json({ error: 'db_error', details: String(e) })
+  }
+})
+
+// SRL Annotations Endpoints
+
+// Get annotations for current user (for UI display)
+app.get('/api/annotations', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'unauthorized' })
+    }
+
+    const { timeWindow } = req.query // '24h', '7d', or null for both
+    const annotations = await getAnnotations(pool, userId, timeWindow, false)
+
+    res.json({ annotations })
+  } catch (e) {
+    console.error('Get annotations error:', e)
+    res.status(500).json({ error: 'db_error', details: String(e) })
+  }
+})
+
+// Get annotations formatted for chatbot/LLM (for Prompt Assembler)
+app.get('/api/annotations/chatbot', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'unauthorized' })
+    }
+
+    const annotationsText = await getAnnotationsForChatbot(pool, userId)
+
+    res.json({ annotationsText })
+  } catch (e) {
+    console.error('Get chatbot annotations error:', e)
     res.status(500).json({ error: 'db_error', details: String(e) })
   }
 })

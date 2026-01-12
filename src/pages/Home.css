@@ -69,6 +69,24 @@
   color: #111827;
 }
 
+.mood-threshold-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+  border-left: 4px solid #F59E0B;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  font-size: 15px;
+  color: #92400E;
+  font-weight: 500;
+}
+
+.mood-threshold-message .threshold-icon {
+  font-size: 20px;
+}
+
 .mood-cards-container {
   display: flex;
   flex-direction: column;
@@ -198,17 +216,17 @@
     align-items: flex-start;
     gap: 16px;
   }
-  
+
   .mood-title {
     position: static;
     transform: none;
     width: 100%;
   }
-  
+
   .fill-survey-button {
     align-self: flex-start;
   }
-  
+
   .mood-constructs-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -219,4 +237,3 @@
     grid-template-columns: 1fr;
   }
 }
-
