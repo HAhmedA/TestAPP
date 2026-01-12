@@ -7,8 +7,7 @@ COPY package.json ./
 RUN npm install --only=production --no-audit --no-fund
 
 # Copy application source
-COPY server.js ./
-COPY services ./services
+COPY . .
 
 ENV PORT=8080
 EXPOSE 8080
