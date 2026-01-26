@@ -7,12 +7,8 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import pool from '../config/database.js'
 import logger from '../utils/logger.js'
-import { getAnnotationsForChatbot } from './annotators/srlAnnotationService.js'
 import { getSummariesForChatbot, hasHistory } from './summarizationService.js'
-import { getJudgmentsForChatbot as getSleepJudgmentsForChatbot } from './annotators/sleepAnnotationService.js'
-import { getJudgmentsForChatbot as getScreenTimeJudgmentsForChatbot } from './annotators/screenTimeAnnotationService.js'
-import { getJudgmentsForChatbot as getSocialMediaJudgmentsForChatbot } from './annotators/socialMediaAnnotationService.js'
-import { getJudgmentsForChatbot as getLMSJudgmentsForChatbot } from './annotators/lmsAnnotationService.js'
+import { getScoresForChatbot } from './scoring/index.js'
 import { estimateTokens } from './apiConnectorService.js'
 
 // Get directory path for ES modules
@@ -177,14 +173,10 @@ async function assemblePrompt(userId, sessionId, userMessage = null) {
     logger.prompt(`Assembling prompt for user ${userId}, session ${sessionId}`)
 
     // Gather all data sources in parallel
-    const [systemPrompt, userContext, annotations, sleepJudgments, screenTimeJudgments, socialMediaJudgments, lmsJudgments, summaries] = await Promise.all([
+    const [systemPrompt, userContext, conceptScores, summaries] = await Promise.all([
         getSystemPrompt(),
         getUserContext(userId),
-        getAnnotationsForChatbot(pool, userId),
-        getSleepJudgmentsForChatbot(pool, userId),
-        getScreenTimeJudgmentsForChatbot(pool, userId),
-        getSocialMediaJudgmentsForChatbot(pool, userId),
-        getLMSJudgmentsForChatbot(pool, userId),
+        getScoresForChatbot(userId),
         getSummariesForChatbot(userId)
     ])
 
@@ -193,9 +185,8 @@ async function assemblePrompt(userId, sessionId, userMessage = null) {
         userId,
         sessionId,
         userContextLength: userContext.length,
-        annotationsLength: annotations.length,
-        annotationsPreview: annotations.substring(0, 200),
-        sleepJudgmentsLength: sleepJudgments.length,
+        conceptScoresLength: conceptScores.length,
+        conceptScoresPreview: conceptScores.substring(0, 200),
         summariesLength: summaries.length
     })
 
@@ -215,14 +206,10 @@ async function assemblePrompt(userId, sessionId, userMessage = null) {
     let currentTokens = estimateTokens(baseSystemPrompt)
     let assembledContext = baseSystemPrompt
 
-    // 2. Context Sections (Prioritized: User Context > Annotations/Sleep/Screen/Social > Summaries)
+    // 2. Context Sections (Prioritized: User Context > Data Summary > Summaries)
     const contextSections = [
         { name: 'USER CONTEXT & PREFERENCES', content: userContext, priority: 1 },
-        { name: 'ANNOTATED QUESTIONNAIRE INSIGHTS', content: annotations, priority: 2 },
-        { name: 'SLEEP ANALYSIS', content: sleepJudgments, priority: 2 },
-        { name: 'SCREEN TIME ANALYSIS', content: screenTimeJudgments, priority: 2 },
-        { name: 'SOCIAL MEDIA ANALYSIS', content: socialMediaJudgments, priority: 2 },
-        { name: 'LMS ACTIVITY ANALYSIS', content: lmsJudgments, priority: 2 },
+        { name: 'STUDENT DATA SUMMARY', content: conceptScores, priority: 2 },
         { name: 'PREVIOUS CHATS (SUMMARIZED)', content: summaries, priority: 3 },
         { name: 'CURRENT SESSION', content: userType, priority: 1 } // High priority for session type
     ]
@@ -315,14 +302,10 @@ async function assemblePrompt(userId, sessionId, userMessage = null) {
 async function assembleInitialGreetingPrompt(userId) {
     logger.prompt(`Assembling initial greeting prompt`, { userId })
 
-    const [systemPrompt, userContext, annotations, sleepJudgments, screenTimeJudgments, socialMediaJudgments, lmsJudgments, summaries] = await Promise.all([
+    const [systemPrompt, userContext, conceptScores, summaries] = await Promise.all([
         getSystemPrompt(),
         getUserContext(userId),
-        getAnnotationsForChatbot(pool, userId),
-        getSleepJudgmentsForChatbot(pool, userId),
-        getScreenTimeJudgmentsForChatbot(pool, userId),
-        getSocialMediaJudgmentsForChatbot(pool, userId),
-        getLMSJudgmentsForChatbot(pool, userId),
+        getScoresForChatbot(userId),
         getSummariesForChatbot(userId)
     ])
 
@@ -335,11 +318,9 @@ async function assembleInitialGreetingPrompt(userId) {
         userType,
         userContextLength: userContext.length,
         userContextPreview: userContext.substring(0, 150),
-        annotationsLength: annotations.length,
-        annotationsPreview: annotations.substring(0, 300),
-        sleepJudgmentsLength: sleepJudgments.length,
-        summariesLength: summaries.length,
-        hasNoData: annotations.includes('No questionnaire data')
+        conceptScoresLength: conceptScores.length,
+        conceptScoresPreview: conceptScores.substring(0, 300),
+        summariesLength: summaries.length
     })
 
     // Note: Greeting behavior is defined in system_prompt.txt under Greeting Rules
@@ -350,23 +331,11 @@ async function assembleInitialGreetingPrompt(userId) {
 USER CONTEXT & PREFERENCES:
 ${userContext}
 
-ANNOTATED QUESTIONNAIRE INSIGHTS:
-${annotations}
-
-SLEEP ANALYSIS:
-${sleepJudgments}
+STUDENT DATA SUMMARY:
+${conceptScores}
 
 PREVIOUS CHATS (SUMMARIZED):
 ${summaries}
-
-SCREEN TIME ANALYSIS:
-${screenTimeJudgments}
-
-SOCIAL MEDIA ANALYSIS:
-${socialMediaJudgments}
-
-LMS ACTIVITY ANALYSIS:
-${lmsJudgments}
 
 CURRENT SESSION:
 This is a ${userType}. Generate a personalized greeting following the Greeting Rules.
@@ -380,7 +349,7 @@ This is a ${userType}. Generate a personalized greeting following the Greeting R
 
 /**
  * Assemble system instructions for alignment checking
- * MUST include the same context (annotations, user profile) as the main prompt
+ * MUST include the same context (user profile, concept scores) as the main prompt
  * so the judge knows what data the assistant is working with.
  * 
  * @param {string} userId - User ID (optional, but needed for context)
@@ -394,13 +363,9 @@ async function getSystemInstructionsForAlignment(userId = null) {
     }
 
     // accurate context for the judge
-    const [userContext, annotations, sleepJudgments, screenTimeJudgments, socialMediaJudgments, lmsJudgments, summaries] = await Promise.all([
+    const [userContext, conceptScores, summaries] = await Promise.all([
         getUserContext(userId),
-        getAnnotationsForChatbot(pool, userId),
-        getSleepJudgmentsForChatbot(pool, userId),
-        getScreenTimeJudgmentsForChatbot(pool, userId),
-        getSocialMediaJudgmentsForChatbot(pool, userId),
-        getLMSJudgmentsForChatbot(pool, userId),
+        getScoresForChatbot(userId),
         getSummariesForChatbot(userId)
     ])
 
@@ -411,20 +376,8 @@ async function getSystemInstructionsForAlignment(userId = null) {
 USER CONTEXT & PREFERENCES:
 ${userContext}
 
-ANNOTATED QUESTIONNAIRE INSIGHTS:
-${annotations}
-
-SLEEP ANALYSIS:
-${sleepJudgments}
-
-SCREEN TIME ANALYSIS:
-${screenTimeJudgments}
-
-SOCIAL MEDIA ANALYSIS:
-${socialMediaJudgments}
-
-LMS ACTIVITY ANALYSIS:
-${lmsJudgments}
+STUDENT DATA SUMMARY:
+${conceptScores}
 
 PREVIOUS CHATS (SUMMARIZED):
 ${summaries}

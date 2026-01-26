@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Surveys from '../components/Surveys'
+import ScoreGauge from '../components/ScoreGauge'
 import { useReduxSelector, useReduxDispatch } from '../redux'
 import { load } from '../redux/surveys'
 import { loadAnnotations, Annotation } from '../redux/results'
@@ -8,6 +9,21 @@ import './Home.css'
 
 // Concepts that are inverted (high score = bad)
 const INVERTED_CONCEPTS = ['anxiety']
+
+// API base URL
+const API_BASE = '/api'
+
+interface ConceptScore {
+    conceptId: string
+    conceptName: string
+    score: number
+    trend: string
+    avg7d: number | null
+    breakdown?: Record<string, { score: number, weight: number, label?: string }>
+}
+
+// ... (rest of file until render)
+
 
 const Home = () => {
     const user = useReduxSelector(state => state.auth.user)
@@ -21,6 +37,11 @@ const Home = () => {
     const [annotations7d, setAnnotations7d] = useState<Annotation[]>([])
     const [loading, setLoading] = useState(false)
     const [hasSufficientData7d, setHasSufficientData7d] = useState(false)
+
+    // Concept scores state
+    const [conceptScores, setConceptScores] = useState<ConceptScore[]>([])
+    const [scoresLoading, setScoresLoading] = useState(false)
+    const [expandedConceptId, setExpandedConceptId] = useState<string | null>(null)
 
     // Load surveys if not already loaded
     useEffect(() => {
@@ -55,6 +76,24 @@ const Home = () => {
         }
     }, [isAdmin, user, dispatch])
 
+    // Load concept scores for students
+    useEffect(() => {
+        if (!isAdmin && user) {
+            setScoresLoading(true)
+            fetch(`${API_BASE}/scores`, { credentials: 'include' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.scores) {
+                        setConceptScores(data.scores)
+                    }
+                    setScoresLoading(false)
+                })
+                .catch(() => {
+                    setScoresLoading(false)
+                })
+        }
+    }, [isAdmin, user])
+
     // Add class to parent main element for student mood layout
     useEffect(() => {
         if (!isAdmin) {
@@ -69,6 +108,36 @@ const Home = () => {
             }
         }
     }, [isAdmin])
+
+    // Helper to format aspect name
+    const formatAspectName = (key: string) => {
+        return key.split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ')
+    }
+
+    // Helper to get score logic (excellent/poor) - duplicated from component for now
+    const getScoreLabel = (score: number) => {
+        if (score >= 80) return 'Excellent'
+        if (score >= 60) return 'Good'
+        if (score >= 40) return 'Fair'
+        if (score >= 20) return 'Poor'
+        return 'Very Poor'
+    }
+
+    // Helper to get color based on score
+    const getScoreColor = (score: number): string => {
+        if (score >= 80) return '#22c55e' // Green
+        if (score >= 60) return '#84cc16' // Light green
+        if (score >= 40) return '#fbbf24' // Yellow
+        if (score >= 20) return '#f97316' // Orange
+        return '#ef4444' // Red
+    }
+
+    // Toggle expansion
+    const handleGaugeClick = (conceptId: string) => {
+        setExpandedConceptId(prev => prev === conceptId ? null : conceptId)
+    }
 
     // Get first survey for "Fill Survey" button
     const firstSurvey = surveys.length > 0 ? surveys[0] : null
@@ -205,7 +274,6 @@ const Home = () => {
         )
     }
 
-
     // For admin users, show the surveys list
     if (isAdmin) {
         return (
@@ -217,7 +285,6 @@ const Home = () => {
     }
 
     // Calculate total responses for display
-
     const totalResponses7d = annotations7d.length > 0 ? annotations7d[0].responseCount : 0
     // Get distinct day count for 7-day period
     const distinctDayCount7d = annotations7d.length > 0 ? annotations7d[0].distinctDayCount : 0
@@ -234,7 +301,6 @@ const Home = () => {
         return desc
     }
 
-    // For student users, show the mood tracking layout
     return (
         <div className='mood-home-wrapper'>
             <div className='mood-home-container'>
@@ -254,6 +320,79 @@ const Home = () => {
                         alt="Student with checklist"
                         className='welcome-card-illustration'
                     />
+                </div>
+
+                {/* Score Gauges Section */}
+                <div className='mood-card'>
+                    <h2 className='mood-card-title'>Your Performance Scores</h2>
+                    <p className='mood-card-description'>
+                        Click on a gauge to see a detailed breakdown of your habits
+                    </p>
+                    <div className='mood-card-content'>
+                        {scoresLoading ? (
+                            <div className='mood-loading'>Loading scores...</div>
+                        ) : conceptScores.length === 0 ? (
+                            <div className='mood-no-data'>No scores available yet. Complete your profile and surveys to see your performance.</div>
+                        ) : (
+                            <div className='score-gauges-grid'>
+                                {conceptScores.map(score => (
+                                    <div
+                                        className={`score-gauge-wrapper ${expandedConceptId === score.conceptId ? 'expanded' : ''}`}
+                                        onClick={() => handleGaugeClick(score.conceptId)}
+                                        key={score.conceptId}
+                                    >
+                                        <ScoreGauge
+                                            score={score.score}
+                                            label={score.conceptName}
+                                            trend={score.trend}
+                                            size="medium"
+                                        />
+                                        {expandedConceptId === score.conceptId && score.breakdown && (
+                                            <div className='score-details-list'>
+                                                <div className='score-details-title'>Detailed Breakdown</div>
+                                                <ul>
+                                                    {Object.entries(score.breakdown).map(([key, data]) => {
+                                                        const label = getScoreLabel(data.score)
+                                                        const color = getScoreColor(data.score)
+                                                        return (
+                                                            <li key={key} style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                                                    <span className='detail-label'>{formatAspectName(key)}</span>
+                                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                                        <span className='detail-value'>{data.score.toFixed(0)}/100</span>
+                                                                        <span
+                                                                            className='detail-score-tag'
+                                                                            style={{
+                                                                                backgroundColor: `${color}20`,
+                                                                                color: color
+                                                                            }}
+                                                                        >
+                                                                            {label}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                {data.label && (
+                                                                    <div className='detail-text' style={{
+                                                                        fontSize: '12px',
+                                                                        color: '#6b7280',
+                                                                        marginTop: '4px',
+                                                                        fontStyle: 'italic',
+                                                                        width: '100%'
+                                                                    }}>
+                                                                        {data.label}
+                                                                    </div>
+                                                                )}
+                                                            </li>
+                                                        )
+                                                    })}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className='mood-cards-container'>

@@ -1,4 +1,4 @@
-// LMS Judgment Service
+// LMS Annotation Service
 // Rule-based computation engine that generates human-readable LMS judgments
 // Modeled after existing judgment services but evaluates per subject independently
 
@@ -311,6 +311,19 @@ async function computeJudgments(pool, userId, days = 7) {
     const actionMix = evaluateActionMix(metrics);
     const sessionQuality = evaluateSessionQuality(metrics);
 
+    // Inject metrics for scoring
+    volume.actions = metrics.total_events || 0;
+    distribution.activeDays = metrics.days_active || 0;
+    consistency.activeDays = metrics.days_active || 0;
+
+    const totalMin = metrics.total_active_minutes || 0;
+    const passiveMin = (metrics.reading_minutes || 0) + (metrics.watching_minutes || 0);
+    const passiveRatio = totalMin > 0 ? passiveMin / totalMin : 0;
+    actionMix.activePercent = Math.round((1 - passiveRatio) * 100);
+
+    const sessions = metrics.number_of_sessions || 0;
+    sessionQuality.avgDuration = sessions > 0 ? totalMin / sessions : 0;
+
     const judgments = { volume, distribution, consistency, actionMix, sessionQuality };
 
     // 4. Compose Sentences
@@ -391,9 +404,105 @@ async function getJudgmentsForChatbot(pool, userId) {
     return result;
 }
 
+/**
+ * Get raw scores for scoring aggregation (0-100 per aspect)
+ */
+async function getRawScoresForScoring(pool, userId) {
+    const { rows } = await pool.query(
+        `SELECT judgment_details FROM public.lms_judgments 
+         WHERE user_id = $1 
+         AND period_end = CURRENT_DATE
+         LIMIT 1`,
+        [userId]
+    );
+
+    if (rows.length === 0) return [];
+
+    const details = rows[0].judgment_details;
+    const aspects = [];
+
+    // Volume score
+    if (details.volume) {
+        const actionsCount = details.volume.actions || 0;
+        const volumeScore = Math.min(100, actionsCount * 2);
+        aspects.push({
+            domain: 'volume',
+            score: Math.round(volumeScore * 100) / 100,
+            label: details.volume.label
+        });
+    }
+
+    // Distribution score
+    if (details.distribution) {
+        const activeDays = details.distribution.activeDays || 0;
+        const distributionScore = (activeDays / 7) * 100;
+        aspects.push({
+            domain: 'distribution',
+            score: Math.round(distributionScore * 100) / 100,
+            label: details.distribution.label
+        });
+    }
+
+    // Consistency score
+    if (details.consistency) {
+        // Use activeDays since stddev was not tracked
+        const activeDays = details.consistency.activeDays || 0;
+        // 5+ days = 100, 3 days = 60, 0 days = 0
+        const consistencyScore = Math.min(100, (activeDays / 5) * 100);
+        aspects.push({
+            domain: 'consistency',
+            score: Math.round(consistencyScore * 100) / 100,
+            label: details.consistency.label
+        });
+    }
+
+    // Action mix score
+    if (details.actionMix) {
+        const activePercent = details.actionMix.activePercent || 0;
+        const actionMixScore = 50 + (activePercent / 100) * 50;
+        const label = details.actionMix.type?.label || 'Action mix evaluated';
+        aspects.push({
+            domain: 'action_mix',
+            score: Math.round(actionMixScore * 100) / 100,
+            label: label
+        });
+    }
+
+    // Session quality score
+    if (details.sessionQuality) {
+        const avgDuration = details.sessionQuality.avgDuration || 0;
+        let sessionScore;
+        if (avgDuration >= 30) {
+            sessionScore = 100;
+        } else if (avgDuration >= 5) {
+            sessionScore = 40 + (avgDuration - 5) * (60 / 25);
+        } else {
+            sessionScore = avgDuration * 8;
+        }
+        aspects.push({
+            domain: 'session_quality',
+            score: Math.round(sessionScore * 100) / 100,
+            label: details.sessionQuality.label
+        });
+    }
+
+    return aspects;
+}
+
+// Keep old function for backwards compatibility
+async function getSeveritiesForScoring(pool, userId) {
+    const rawScores = await getRawScoresForScoring(pool, userId);
+    return rawScores.map(r => ({
+        domain: r.domain,
+        severity: r.score >= 75 ? 'ok' : r.score >= 40 ? 'warning' : 'poor'
+    }));
+}
+
 export {
     computeJudgments,
     getJudgmentsForChatbot,
+    getSeveritiesForScoring,
+    getRawScoresForScoring,
     evaluateActivityVolume,
     evaluateDistribution,
     evaluateConsistency,
@@ -401,3 +510,5 @@ export {
     evaluateSessionQuality,
     composeSentences
 };
+
+

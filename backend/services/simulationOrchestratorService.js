@@ -10,6 +10,7 @@ import {
     generateSocialMediaData,
     generateLMSData
 } from './simulators/index.js';
+import { computeAllScores } from './scoring/index.js';
 
 // =============================================================================
 // PROFILE MANAGEMENT
@@ -105,6 +106,10 @@ async function generateStudentData(pool, userId) {
                 .catch(err => logger.error(`LMS simulation failed: ${err.message}`))
         ]);
 
+        // 3. Compute Concept Scores (after all data is generated)
+        await computeAllScores(userId);
+        logger.info(`Concept scores computed for user ${userId}`);
+
         logger.info(`All data simulation complete for user ${userId}`);
         return profile;
 
@@ -118,3 +123,4 @@ export {
     generateStudentData,
     getOrAssignProfile
 };
+

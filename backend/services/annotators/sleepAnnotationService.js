@@ -1,4 +1,4 @@
-// Sleep Judgment Service
+// Sleep Annotation Service
 // Rule-based computation engine that generates human-readable sleep judgments
 // Modeled after annotationService.js
 
@@ -27,14 +27,6 @@ const CONTINUITY_THRESHOLDS = {
     // Above minor = fragmented
 };
 
-/**
- * Sleep stages thresholds
- * Restorative sleep = deep + REM as percentage of total
- */
-const STAGES_THRESHOLDS = {
-    restorative_percent: 0.35, // deep + rem should be >= 35% of total
-    individual_deficit: 0.20   // 20% below baseline = warning
-};
 
 /**
  * Timing thresholds (deviation in minutes from baseline)
@@ -142,76 +134,6 @@ function evaluateContinuity(session) {
     };
 }
 
-/**
- * Evaluate sleep stages (quality proxy)
- * @param {Object} session - Sleep session data
- * @param {Object} baseline - User's baseline metrics
- * @returns {Object} - Judgment object
- */
-function evaluateStages(session, baseline) {
-    const totalSleep = session.total_sleep_minutes;
-    if (totalSleep === 0) {
-        return {
-            judgment_key: 'restorative_sleep_unknown',
-            severity: 'warning',
-            explanation: 'Sleep stages could not be evaluated',
-            explanation_llm: 'Sleep duration was too short to evaluate sleep stages properly.'
-        };
-    }
-
-    const deepPercent = (session.deep_sleep_minutes / totalSleep) * 100;
-    const remPercent = (session.rem_sleep_minutes / totalSleep) * 100;
-    const restorativePercent = (session.deep_sleep_minutes + session.rem_sleep_minutes) / totalSleep;
-
-    // Check overall restorative percentage
-    if (restorativePercent < STAGES_THRESHOLDS.restorative_percent) {
-        return {
-            judgment_key: 'restorative_sleep_low',
-            severity: 'poor',
-            explanation: 'Restorative sleep was low',
-            explanation_llm: `Restorative sleep (deep + REM) was only ${Math.round(restorativePercent * 100)}% of total sleep, below the healthy threshold of 35%. Deep sleep helps physical recovery, while REM supports memory and learning.`
-        };
-    }
-
-    // Check individual stage deficits against baseline
-    const deepDeficit = deepPercent < (baseline.avg_deep_percent * (1 - STAGES_THRESHOLDS.individual_deficit));
-    const remDeficit = remPercent < (baseline.avg_rem_percent * (1 - STAGES_THRESHOLDS.individual_deficit));
-
-    if (deepDeficit && remDeficit) {
-        return {
-            judgment_key: 'both_stages_low',
-            severity: 'warning',
-            explanation: 'Both deep and REM sleep were below normal',
-            explanation_llm: `Both deep sleep (${Math.round(deepPercent)}%) and REM sleep (${Math.round(remPercent)}%) were below your usual levels. This combination may affect both physical recovery and cognitive function.`
-        };
-    }
-
-    if (deepDeficit) {
-        return {
-            judgment_key: 'deep_sleep_low',
-            severity: 'warning',
-            explanation: 'Deep sleep was low',
-            explanation_llm: `Deep sleep was ${Math.round(deepPercent)}% of total sleep, below your usual ${Math.round(baseline.avg_deep_percent)}%. Deep sleep is important for physical recovery and immune function.`
-        };
-    }
-
-    if (remDeficit) {
-        return {
-            judgment_key: 'rem_sleep_low',
-            severity: 'warning',
-            explanation: 'REM sleep was low',
-            explanation_llm: `REM sleep was ${Math.round(remPercent)}% of total sleep, below your usual ${Math.round(baseline.avg_rem_percent)}%. REM sleep is important for memory consolidation and learning.`
-        };
-    }
-
-    // Balanced stages
-    return {
-        judgment_key: 'stages_balanced',
-        severity: 'ok',
-        explanation: 'Sleep stages were balanced',
-        explanation_llm: `Sleep stages were well balanced with ${Math.round(deepPercent)}% deep sleep and ${Math.round(remPercent)}% REM sleep. This indicates good quality restorative sleep.`
-    };
-}
 
 /**
  * Convert timestamp to decimal hours (e.g., 11:30 PM = 23.5)
@@ -315,7 +237,6 @@ async function computeJudgments(pool, sessionId) {
     const judgments = [
         { domain: 'duration', ...evaluateDuration(session, baseline) },
         { domain: 'continuity', ...evaluateContinuity(session) },
-        { domain: 'stages', ...evaluateStages(session, baseline) },
         { domain: 'timing', ...evaluateTiming(session, baseline) }
     ];
 
@@ -380,10 +301,13 @@ async function recomputeBaseline(pool, userId, days = 7) {
     const { rows } = await pool.query(
         `SELECT 
            AVG(total_sleep_minutes) as avg_total,
-           AVG(EXTRACT(HOUR FROM bedtime) + EXTRACT(MINUTE FROM bedtime)/60.0) as avg_bedtime,
+           AVG(
+             CASE 
+               WHEN EXTRACT(HOUR FROM bedtime) < 12 THEN EXTRACT(HOUR FROM bedtime) + 24 
+               ELSE EXTRACT(HOUR FROM bedtime) 
+             END + EXTRACT(MINUTE FROM bedtime)/60.0
+           ) as avg_bedtime_shifted,
            AVG(EXTRACT(HOUR FROM wake_time) + EXTRACT(MINUTE FROM wake_time)/60.0) as avg_wake,
-           AVG(CASE WHEN total_sleep_minutes > 0 THEN deep_sleep_minutes * 100.0 / total_sleep_minutes ELSE 0 END) as avg_deep,
-           AVG(CASE WHEN total_sleep_minutes > 0 THEN rem_sleep_minutes * 100.0 / total_sleep_minutes ELSE 0 END) as avg_rem,
            COUNT(*) as sessions_count
          FROM public.sleep_sessions
          WHERE user_id = $1 AND session_date >= CURRENT_DATE - INTERVAL '${days} days'`,
@@ -395,20 +319,21 @@ async function recomputeBaseline(pool, userId, days = 7) {
     }
 
     const stats = rows[0];
+    // Normalize bedtime back to 0-23 range
+    let avgBedtime = parseFloat(stats.avg_bedtime_shifted);
+    if (avgBedtime >= 24) avgBedtime -= 24;
 
     await pool.query(
         `INSERT INTO public.sleep_baselines 
-         (user_id, avg_total_sleep_minutes, avg_bedtime_hour, avg_wake_time_hour, avg_deep_percent, avg_rem_percent, sessions_count, computed_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+         (user_id, avg_total_sleep_minutes, avg_bedtime_hour, avg_wake_time_hour, sessions_count, computed_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())
          ON CONFLICT (user_id) DO UPDATE SET
            avg_total_sleep_minutes = EXCLUDED.avg_total_sleep_minutes,
            avg_bedtime_hour = EXCLUDED.avg_bedtime_hour,
            avg_wake_time_hour = EXCLUDED.avg_wake_time_hour,
-           avg_deep_percent = EXCLUDED.avg_deep_percent,
-           avg_rem_percent = EXCLUDED.avg_rem_percent,
            sessions_count = EXCLUDED.sessions_count,
            computed_at = NOW()`,
-        [userId, stats.avg_total, stats.avg_bedtime, stats.avg_wake, stats.avg_deep, stats.avg_rem, stats.sessions_count]
+        [userId, stats.avg_total, avgBedtime, stats.avg_wake, stats.sessions_count]
     );
 }
 
@@ -511,6 +436,96 @@ async function hasSleepData(pool, userId) {
 }
 
 // =============================================================================
+// SCORING INTEGRATION
+// =============================================================================
+
+/**
+ * Get raw scores for scoring aggregation (0-100 per aspect)
+ * Uses actual session data to calculate continuous scores
+ * 
+ * @param {Object} pool - Database connection pool
+ * @param {string} userId - User ID
+ * @returns {Promise<Array<{domain: string, score: number}>>}
+ */
+async function getRawScoresForScoring(pool, userId) {
+    // Get the most recent session with its baseline
+    const { rows } = await pool.query(
+        `SELECT ss.id as session_id, ss.total_sleep_minutes, ss.awakenings_count, ss.awake_minutes,
+                ss.bedtime, ss.wake_time, sb.avg_total_sleep_minutes,
+                sb.avg_bedtime_hour, sb.avg_wake_time_hour
+         FROM public.sleep_sessions ss
+         JOIN public.sleep_baselines sb ON ss.user_id = sb.user_id
+         WHERE ss.user_id = $1
+         ORDER BY ss.session_date DESC
+         LIMIT 1`,
+        [userId]
+    );
+
+    if (rows.length === 0) return [];
+
+    const session = rows[0];
+    const baseline = session.avg_total_sleep_minutes || 420; // 7h default
+
+    // Duration score: 100 = exactly at baseline, scales down for deviations
+    // Ideal range: 90-110% of baseline = 100 points
+    // Below 75% = 0 points, above 120% = slight penalty
+    const durationRatio = session.total_sleep_minutes / baseline;
+    let durationScore;
+    if (durationRatio >= 0.9 && durationRatio <= 1.1) {
+        durationScore = 100;
+    } else if (durationRatio < 0.9) {
+        // Scale from 0-100 as ratio goes from 0.5 to 0.9
+        durationScore = Math.max(0, (durationRatio - 0.5) / 0.4 * 100);
+    } else {
+        // Slight penalty for oversleep (1.1 to 1.4 range)
+        durationScore = Math.max(50, 100 - (durationRatio - 1.1) / 0.3 * 50);
+    }
+
+    // Continuity score: Based on awakenings and awake minutes
+    // 0 awakenings = 100, 1-2 = 90, 3-4 = 70, 5+ = penalty
+    // Also factor in awake_minutes: 0 = 100, 10+ = penalty
+    const awakeningsScore = Math.max(0, 100 - session.awakenings_count * 15);
+    const awakeMinutesScore = Math.max(0, 100 - session.awake_minutes * 2);
+    const continuityScore = (awakeningsScore * 0.6 + awakeMinutesScore * 0.4);
+
+    // Timing score: Based on deviation from baseline
+    // Extract hour from bedtime for comparison
+    const bedtimeHour = new Date(session.bedtime).getHours() +
+        new Date(session.bedtime).getMinutes() / 60;
+    const baselineBedtimeHour = parseFloat(session.avg_bedtime_hour) || 23;
+
+    // Calculate deviation in hours (handle midnight crossing)
+    let timingDeviation = Math.abs(bedtimeHour - baselineBedtimeHour);
+    if (timingDeviation > 12) timingDeviation = 24 - timingDeviation;
+
+    // 0 deviation = 100, 1h = 80, 2h = 60, 5h+ = 0
+    const timingScore = Math.max(0, 100 - timingDeviation * 20);
+
+    // Fetch judgments for labels
+    const { rows: judgments } = await pool.query(
+        `SELECT domain, explanation FROM public.sleep_judgments WHERE session_id = $1`,
+        [session.session_id]
+    );
+    const judgmentMap = {};
+    judgments.forEach(j => judgmentMap[j.domain] = j.explanation);
+
+    return [
+        { domain: 'duration', score: Math.round(durationScore * 100) / 100, label: judgmentMap['duration'] },
+        { domain: 'continuity', score: Math.round(continuityScore * 100) / 100, label: judgmentMap['continuity'] },
+        { domain: 'timing', score: Math.round(timingScore * 100) / 100, label: judgmentMap['timing'] }
+    ];
+}
+
+// Keep old function for backwards compatibility
+async function getSeveritiesForScoring(pool, userId) {
+    const rawScores = await getRawScoresForScoring(pool, userId);
+    return rawScores.map(r => ({
+        domain: r.domain,
+        severity: r.score >= 75 ? 'ok' : r.score >= 40 ? 'warning' : 'poor'
+    }));
+}
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -524,15 +539,19 @@ export {
     getJudgmentsForChatbot,
     hasSleepData,
 
+    // Scoring integration
+    getSeveritiesForScoring,
+    getRawScoresForScoring,
+
     // Individual evaluators (for testing)
     evaluateDuration,
     evaluateContinuity,
-    evaluateStages,
     evaluateTiming,
 
     // Thresholds (for testing/configuration)
     DURATION_THRESHOLDS,
     CONTINUITY_THRESHOLDS,
-    STAGES_THRESHOLDS,
     TIMING_THRESHOLDS
 };
+
+

@@ -9,7 +9,7 @@
 // - Day-to-day variance with noise
 // - Session fragmentation patterns
 
-import logger from '../utils/logger.js';
+import logger from '../../utils/logger.js';
 import { computeJudgments, recomputeBaseline } from '../annotators/screenTimeAnnotationService.js';
 
 // =============================================================================

@@ -18,10 +18,6 @@ CREATE TABLE IF NOT EXISTS public.sleep_sessions (
   total_sleep_minutes int NOT NULL CHECK (total_sleep_minutes >= 0),
   time_in_bed_minutes int NOT NULL CHECK (time_in_bed_minutes >= 0),
   
-  -- Sleep stages (minutes)
-  light_sleep_minutes int NOT NULL DEFAULT 0 CHECK (light_sleep_minutes >= 0),
-  deep_sleep_minutes int NOT NULL DEFAULT 0 CHECK (deep_sleep_minutes >= 0),
-  rem_sleep_minutes int NOT NULL DEFAULT 0 CHECK (rem_sleep_minutes >= 0),
   
   -- Interruptions
   awakenings_count int NOT NULL DEFAULT 0 CHECK (awakenings_count >= 0),
@@ -53,9 +49,6 @@ CREATE TABLE IF NOT EXISTS public.sleep_baselines (
   avg_bedtime_hour numeric(4,2) NOT NULL DEFAULT 23.0,
   avg_wake_time_hour numeric(4,2) NOT NULL DEFAULT 7.0,
   
-  -- Stage proportions (as percentages, 0-100)
-  avg_deep_percent numeric(5,2) NOT NULL DEFAULT 20.0,
-  avg_rem_percent numeric(5,2) NOT NULL DEFAULT 20.0,
   
   -- Metadata
   sessions_count int NOT NULL DEFAULT 0,
@@ -76,7 +69,7 @@ CREATE TABLE IF NOT EXISTS public.sleep_judgments (
   session_id uuid NOT NULL REFERENCES public.sleep_sessions(id) ON DELETE CASCADE,
   
   -- Judgment classification
-  domain varchar(20) NOT NULL CHECK (domain IN ('duration', 'continuity', 'stages', 'timing')),
+  domain varchar(20) NOT NULL CHECK (domain IN ('duration', 'continuity', 'timing')),
   judgment_key varchar(50) NOT NULL,
   severity varchar(10) NOT NULL CHECK (severity IN ('ok', 'warning', 'poor')),
   

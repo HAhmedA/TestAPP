@@ -8,7 +8,7 @@
 // - Correlated metrics (poor sleep affects multiple dimensions together)
 // - Day-to-day carry-over (bad night can influence next night)
 
-import logger from '../utils/logger.js';
+import logger from '../../utils/logger.js';
 import { computeJudgments, recomputeBaseline } from '../annotators/sleepAnnotationService.js';
 
 // =============================================================================
@@ -27,8 +27,6 @@ const SLEEP_PATTERNS = {
         time_in_bed: { base: 480, variance: 20 },      // ~8h
         bedtime_hour: { base: 23.0, variance: 0.5 },   // 11:00 PM ± 30min
         wake_hour: { base: 7.0, variance: 0.5 },       // 7:00 AM ± 30min
-        deep_percent: { base: 22, variance: 3 },       // Good deep sleep
-        rem_percent: { base: 23, variance: 3 },        // Good REM
         awakenings: { base: 1, variance: 1 },          // Minimal awakenings
         awake_minutes: { base: 5, variance: 5 },       // Brief awakenings
         // Behavior modifiers
@@ -45,8 +43,6 @@ const SLEEP_PATTERNS = {
         time_in_bed: { base: 460, variance: 40 },
         bedtime_hour: { base: 23.5, variance: 1.5 },   // Later, more variable
         wake_hour: { base: 7.5, variance: 1.0 },
-        deep_percent: { base: 18, variance: 5 },       // Variable stages
-        rem_percent: { base: 20, variance: 5 },
         awakenings: { base: 3, variance: 2 },          // Some disruption
         awake_minutes: { base: 15, variance: 10 },
         // Behavior modifiers
@@ -63,8 +59,6 @@ const SLEEP_PATTERNS = {
         time_in_bed: { base: 420, variance: 60 },
         bedtime_hour: { base: 1.0, variance: 2.0 },    // Very late (1:00 AM)
         wake_hour: { base: 8.0, variance: 1.5 },       // Inconsistent wake
-        deep_percent: { base: 14, variance: 5 },       // Poor deep sleep
-        rem_percent: { base: 16, variance: 5 },        // Poor REM
         awakenings: { base: 5, variance: 3 },          // Fragmented
         awake_minutes: { base: 30, variance: 15 },     // Long awake periods
         // Behavior modifiers
@@ -205,29 +199,6 @@ function generateSession(pattern, sessionDate, options = {}) {
     }
     const wakeTime = createTimestamp(new Date(sessionDate), wakeHour);
 
-    // === GENERATE SLEEP STAGES (correlated with overall quality) ===
-
-    // If it's a bad night (low anomaly multiplier or negative carry-over), 
-    // deep sleep and REM are also affected
-    let deepBase = pattern.deep_percent.base;
-    let remBase = pattern.rem_percent.base;
-
-    if (anomalyMultiplier < 1) {
-        deepBase = deepBase * anomalyMultiplier;
-        remBase = remBase * anomalyMultiplier;
-    } else if (anomalyMultiplier > 1) {
-        deepBase = Math.min(deepBase * 1.1, 30); // Modest improvement
-        remBase = Math.min(remBase * 1.1, 30);
-    }
-
-    const deepPercent = clamp(addVariance(deepBase, pattern.deep_percent.variance), 5, 35) / 100;
-    const remPercent = clamp(addVariance(remBase, pattern.rem_percent.variance), 10, 35) / 100;
-    const lightPercent = 1 - deepPercent - remPercent;
-
-    const deepMinutes = Math.round(totalSleep * deepPercent);
-    const remMinutes = Math.round(totalSleep * remPercent);
-    const lightMinutes = totalSleep - deepMinutes - remMinutes;
-
     // === GENERATE INTERRUPTIONS (inversely correlated with quality) ===
 
     let awakeningsBase = pattern.awakenings.base;
@@ -252,9 +223,6 @@ function generateSession(pattern, sessionDate, options = {}) {
         wake_time: wakeTime,
         total_sleep_minutes: totalSleep,
         time_in_bed_minutes: timeInBed,
-        light_sleep_minutes: lightMinutes,
-        deep_sleep_minutes: deepMinutes,
-        rem_sleep_minutes: remMinutes,
         awakenings_count: awakenings,
         awake_minutes: awakeMinutes,
         is_simulated: true,
@@ -337,23 +305,19 @@ async function generateSleepData(pool, userId, days = 7, profileOverride = null)
         const result = await pool.query(
             `INSERT INTO public.sleep_sessions 
              (user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes,
-              light_sleep_minutes, deep_sleep_minutes, rem_sleep_minutes, awakenings_count, awake_minutes, is_simulated)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+              awakenings_count, awake_minutes, is_simulated)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              ON CONFLICT (user_id, session_date) DO UPDATE SET
                bedtime = EXCLUDED.bedtime,
                wake_time = EXCLUDED.wake_time,
                total_sleep_minutes = EXCLUDED.total_sleep_minutes,
                time_in_bed_minutes = EXCLUDED.time_in_bed_minutes,
-               light_sleep_minutes = EXCLUDED.light_sleep_minutes,
-               deep_sleep_minutes = EXCLUDED.deep_sleep_minutes,
-               rem_sleep_minutes = EXCLUDED.rem_sleep_minutes,
                awakenings_count = EXCLUDED.awakenings_count,
                awake_minutes = EXCLUDED.awake_minutes,
                is_simulated = EXCLUDED.is_simulated
              RETURNING id`,
             [userId, session.session_date, session.bedtime, session.wake_time,
                 session.total_sleep_minutes, session.time_in_bed_minutes,
-                session.light_sleep_minutes, session.deep_sleep_minutes, session.rem_sleep_minutes,
                 session.awakenings_count, session.awake_minutes, session.is_simulated]
         );
 

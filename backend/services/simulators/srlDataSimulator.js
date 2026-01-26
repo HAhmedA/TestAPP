@@ -9,7 +9,7 @@
 // - Gradual trends (slight improvement or decline over time)
 
 import { randomUUID } from 'crypto';
-import logger from '../utils/logger.js';
+import logger from '../../utils/logger.js';
 import {
     computeAnnotations,
     CONCEPT_SHORT_NAMES

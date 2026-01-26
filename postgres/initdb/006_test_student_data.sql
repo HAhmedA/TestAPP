@@ -461,85 +461,85 @@ BEGIN
     DELETE FROM public.sleep_baselines WHERE user_id = test_user_id;
 
     -- Insert sleep baseline
-    INSERT INTO public.sleep_baselines (user_id, avg_total_sleep_minutes, avg_bedtime_hour, avg_wake_time_hour, avg_deep_percent, avg_rem_percent, sessions_count, computed_at)
-    VALUES (test_user_id, 400, 23.5, 7.5, 18, 20, 7, NOW());
+    INSERT INTO public.sleep_baselines (user_id, avg_total_sleep_minutes, avg_bedtime_hour, avg_wake_time_hour, sessions_count, computed_at)
+    VALUES (test_user_id, 400, 23.5, 7.5, 7, NOW());
 
     -- Insert 7 days of sleep sessions (average pattern: variable, some disruptions)
     -- Day 7 (6 days ago) - Decent night
-    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, light_sleep_minutes, deep_sleep_minutes, rem_sleep_minutes, awakenings_count, awake_minutes, is_simulated)
+    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, awakenings_count, awake_minutes, is_simulated)
     VALUES (
         'b1b2c3d4-0001-7890-abcd-ef1234567890',
         test_user_id,
         CURRENT_DATE - INTERVAL '6 days',
         (CURRENT_DATE - INTERVAL '6 days' + TIME '23:30:00')::timestamptz,
         (CURRENT_DATE - INTERVAL '5 days' + TIME '07:00:00')::timestamptz,
-        420, 450, 252, 84, 84, 2, 8, true
+        420, 450, 2, 8, true
     );
 
     -- Day 6 (5 days ago) - Poor night (late bedtime)
-    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, light_sleep_minutes, deep_sleep_minutes, rem_sleep_minutes, awakenings_count, awake_minutes, is_simulated)
+    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, awakenings_count, awake_minutes, is_simulated)
     VALUES (
         'b1b2c3d4-0002-7890-abcd-ef1234567890',
         test_user_id,
         CURRENT_DATE - INTERVAL '5 days',
         (CURRENT_DATE - INTERVAL '5 days' + TIME '01:30:00')::timestamptz,
         (CURRENT_DATE - INTERVAL '4 days' + TIME '07:30:00')::timestamptz,
-        330, 360, 198, 66, 66, 4, 18, true
+        330, 360, 4, 18, true
     );
 
     -- Day 5 (4 days ago) - Fragmented
-    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, light_sleep_minutes, deep_sleep_minutes, rem_sleep_minutes, awakenings_count, awake_minutes, is_simulated)
+    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, awakenings_count, awake_minutes, is_simulated)
     VALUES (
         'b1b2c3d4-0003-7890-abcd-ef1234567890',
         test_user_id,
         CURRENT_DATE - INTERVAL '4 days',
         (CURRENT_DATE - INTERVAL '4 days' + TIME '00:00:00')::timestamptz,
         (CURRENT_DATE - INTERVAL '3 days' + TIME '07:45:00')::timestamptz,
-        380, 465, 228, 76, 76, 6, 35, true
+        380, 465, 6, 35, true
     );
 
     -- Day 4 (3 days ago) - Good night
-    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, light_sleep_minutes, deep_sleep_minutes, rem_sleep_minutes, awakenings_count, awake_minutes, is_simulated)
+    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, awakenings_count, awake_minutes, is_simulated)
     VALUES (
         'b1b2c3d4-0004-7890-abcd-ef1234567890',
         test_user_id,
         CURRENT_DATE - INTERVAL '3 days',
         (CURRENT_DATE - INTERVAL '3 days' + TIME '23:00:00')::timestamptz,
         (CURRENT_DATE - INTERVAL '2 days' + TIME '07:15:00')::timestamptz,
-        450, 495, 247, 99, 104, 1, 5, true
+        450, 495, 1, 5, true
     );
 
     -- Day 3 (2 days ago) - Average
-    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, light_sleep_minutes, deep_sleep_minutes, rem_sleep_minutes, awakenings_count, awake_minutes, is_simulated)
+    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, awakenings_count, awake_minutes, is_simulated)
     VALUES (
         'b1b2c3d4-0005-7890-abcd-ef1234567890',
         test_user_id,
         CURRENT_DATE - INTERVAL '2 days',
         (CURRENT_DATE - INTERVAL '2 days' + TIME '23:45:00')::timestamptz,
         (CURRENT_DATE - INTERVAL '1 day' + TIME '07:30:00')::timestamptz,
-        405, 465, 243, 81, 81, 3, 12, true
+        405, 465, 3, 12, true
     );
 
     -- Day 2 (yesterday) - Short sleep
-    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, light_sleep_minutes, deep_sleep_minutes, rem_sleep_minutes, awakenings_count, awake_minutes, is_simulated)
+    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, awakenings_count, awake_minutes, is_simulated)
     VALUES (
         'b1b2c3d4-0006-7890-abcd-ef1234567890',
         test_user_id,
         CURRENT_DATE - INTERVAL '1 day',
         (CURRENT_DATE - INTERVAL '1 day' + TIME '00:30:00')::timestamptz,
         (CURRENT_DATE + TIME '06:30:00')::timestamptz,
-        340, 360, 204, 68, 68, 2, 10, true
+        340, 360, 2, 10, true
     );
 
     -- Day 1 (last night) - Irregular timing
-    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, light_sleep_minutes, deep_sleep_minutes, rem_sleep_minutes, awakenings_count, awake_minutes, is_simulated)
+    INSERT INTO public.sleep_sessions (id, user_id, session_date, bedtime, wake_time, total_sleep_minutes, time_in_bed_minutes, awakenings_count, awake_minutes, is_simulated)
     VALUES (
         'b1b2c3d4-0007-7890-abcd-ef1234567890',
         test_user_id,
         CURRENT_DATE,
         (CURRENT_DATE + TIME '02:00:00')::timestamptz,
         (CURRENT_DATE + TIME '09:00:00')::timestamptz,
-        390, 420, 234, 78, 78, 3, 15, true
+        390, 420, 3, 15, true
     );
 
     -- Insert sleep judgments for each session (4 domains each)
@@ -547,49 +547,42 @@ BEGIN
     INSERT INTO public.sleep_judgments (user_id, session_id, domain, judgment_key, severity, explanation, explanation_llm, computed_at) VALUES
     (test_user_id, 'b1b2c3d4-0001-7890-abcd-ef1234567890', 'duration', 'sleep_time_sufficient', 'ok', 'Sleep time was sufficient', 'Sleep duration was within the healthy range (420 minutes, close to the usual 400 minutes). Good job maintaining consistent sleep duration.', NOW()),
     (test_user_id, 'b1b2c3d4-0001-7890-abcd-ef1234567890', 'continuity', 'sleep_continuous', 'ok', 'Sleep was continuous', 'Sleep was continuous with minimal interruptions (2 awakenings, 8 minutes awake). This indicates good sleep quality and efficient rest.', NOW()),
-    (test_user_id, 'b1b2c3d4-0001-7890-abcd-ef1234567890', 'stages', 'stages_balanced', 'ok', 'Sleep stages were balanced', 'Sleep stages were well balanced with 20% deep sleep and 20% REM sleep. This indicates good quality restorative sleep.', NOW()),
     (test_user_id, 'b1b2c3d4-0001-7890-abcd-ef1234567890', 'timing', 'schedule_consistent', 'ok', 'Sleep schedule was consistent', 'Sleep schedule was consistent with usual patterns. Bedtime and wake time were within 30 minutes of the normal schedule.', NOW());
 
     -- Judgments for Day 6 (poor - late bedtime)
     INSERT INTO public.sleep_judgments (user_id, session_id, domain, judgment_key, severity, explanation, explanation_llm, computed_at) VALUES
     (test_user_id, 'b1b2c3d4-0002-7890-abcd-ef1234567890', 'duration', 'sleep_time_low', 'warning', 'Sleep time was slightly low', 'Sleep duration was slightly below normal (330 minutes, 83% of the usual 400 minutes). A bit more rest might help with focus and energy levels.', NOW()),
     (test_user_id, 'b1b2c3d4-0002-7890-abcd-ef1234567890', 'continuity', 'sleep_minor_interruptions', 'warning', 'Sleep had minor interruptions', 'Sleep had some interruptions (4 awakenings, 18 minutes awake). While not severe, this may slightly reduce the restorative quality of sleep.', NOW()),
-    (test_user_id, 'b1b2c3d4-0002-7890-abcd-ef1234567890', 'stages', 'stages_balanced', 'ok', 'Sleep stages were balanced', 'Sleep stages were well balanced with 20% deep sleep and 20% REM sleep.', NOW()),
     (test_user_id, 'b1b2c3d4-0002-7890-abcd-ef1234567890', 'timing', 'schedule_inconsistent', 'poor', 'Sleep schedule was inconsistent', 'Sleep schedule was significantly inconsistent. Bedtime was about 120 minutes off from the usual pattern.', NOW());
 
     -- Judgments for Day 5 (fragmented)
     INSERT INTO public.sleep_judgments (user_id, session_id, domain, judgment_key, severity, explanation, explanation_llm, computed_at) VALUES
     (test_user_id, 'b1b2c3d4-0003-7890-abcd-ef1234567890', 'duration', 'sleep_time_low', 'warning', 'Sleep time was slightly low', 'Sleep duration was slightly below normal (380 minutes, 95% of the usual 400 minutes).', NOW()),
     (test_user_id, 'b1b2c3d4-0003-7890-abcd-ef1234567890', 'continuity', 'sleep_fragmented', 'poor', 'Sleep was fragmented', 'Sleep was fragmented with significant time spent awake (6 awakenings, 35 minutes awake). This level of disruption typically reduces sleep quality.', NOW()),
-    (test_user_id, 'b1b2c3d4-0003-7890-abcd-ef1234567890', 'stages', 'stages_balanced', 'ok', 'Sleep stages were balanced', 'Sleep stages were well balanced with 20% deep sleep and 20% REM sleep.', NOW()),
     (test_user_id, 'b1b2c3d4-0003-7890-abcd-ef1234567890', 'timing', 'timing_slightly_irregular', 'warning', 'Sleep timing was slightly irregular', 'Sleep timing was slightly irregular, with bedtime shifted by about 30 minutes from the usual schedule.', NOW());
 
     -- Judgments for Day 4 (good night)
     INSERT INTO public.sleep_judgments (user_id, session_id, domain, judgment_key, severity, explanation, explanation_llm, computed_at) VALUES
     (test_user_id, 'b1b2c3d4-0004-7890-abcd-ef1234567890', 'duration', 'sleep_time_sufficient', 'ok', 'Sleep time was sufficient', 'Sleep duration was within the healthy range (450 minutes, 113% of the usual 400 minutes). Good job maintaining consistent sleep duration.', NOW()),
     (test_user_id, 'b1b2c3d4-0004-7890-abcd-ef1234567890', 'continuity', 'sleep_continuous', 'ok', 'Sleep was continuous', 'Sleep was continuous with minimal interruptions (1 awakening, 5 minutes awake). This indicates good sleep quality.', NOW()),
-    (test_user_id, 'b1b2c3d4-0004-7890-abcd-ef1234567890', 'stages', 'stages_balanced', 'ok', 'Sleep stages were balanced', 'Sleep stages were well balanced with 22% deep sleep and 23% REM sleep. This indicates good quality restorative sleep.', NOW()),
     (test_user_id, 'b1b2c3d4-0004-7890-abcd-ef1234567890', 'timing', 'schedule_consistent', 'ok', 'Sleep schedule was consistent', 'Sleep schedule was consistent with usual patterns. Bedtime and wake time were within 30 minutes of the normal schedule.', NOW());
 
     -- Judgments for Day 3 (average)
     INSERT INTO public.sleep_judgments (user_id, session_id, domain, judgment_key, severity, explanation, explanation_llm, computed_at) VALUES
     (test_user_id, 'b1b2c3d4-0005-7890-abcd-ef1234567890', 'duration', 'sleep_time_sufficient', 'ok', 'Sleep time was sufficient', 'Sleep duration was within the healthy range (405 minutes, close to the usual 400 minutes).', NOW()),
     (test_user_id, 'b1b2c3d4-0005-7890-abcd-ef1234567890', 'continuity', 'sleep_minor_interruptions', 'warning', 'Sleep had minor interruptions', 'Sleep had some interruptions (3 awakenings, 12 minutes awake).', NOW()),
-    (test_user_id, 'b1b2c3d4-0005-7890-abcd-ef1234567890', 'stages', 'stages_balanced', 'ok', 'Sleep stages were balanced', 'Sleep stages were well balanced with 20% deep sleep and 20% REM sleep.', NOW()),
     (test_user_id, 'b1b2c3d4-0005-7890-abcd-ef1234567890', 'timing', 'schedule_consistent', 'ok', 'Sleep schedule was consistent', 'Sleep schedule was consistent with usual patterns.', NOW());
 
     -- Judgments for Day 2 (short sleep)
     INSERT INTO public.sleep_judgments (user_id, session_id, domain, judgment_key, severity, explanation, explanation_llm, computed_at) VALUES
     (test_user_id, 'b1b2c3d4-0006-7890-abcd-ef1234567890', 'duration', 'sleep_time_low', 'warning', 'Sleep time was slightly low', 'Sleep duration was slightly below normal (340 minutes, 85% of the usual 400 minutes).', NOW()),
     (test_user_id, 'b1b2c3d4-0006-7890-abcd-ef1234567890', 'continuity', 'sleep_continuous', 'ok', 'Sleep was continuous', 'Sleep was continuous with minimal interruptions (2 awakenings, 10 minutes awake).', NOW()),
-    (test_user_id, 'b1b2c3d4-0006-7890-abcd-ef1234567890', 'stages', 'stages_balanced', 'ok', 'Sleep stages were balanced', 'Sleep stages were well balanced with 20% deep sleep and 20% REM sleep.', NOW()),
     (test_user_id, 'b1b2c3d4-0006-7890-abcd-ef1234567890', 'timing', 'timing_slightly_irregular', 'warning', 'Sleep timing was slightly irregular', 'Sleep timing was slightly irregular, with bedtime shifted by about 60 minutes from the usual schedule.', NOW());
 
     -- Judgments for Day 1 (last night - irregular timing)
     INSERT INTO public.sleep_judgments (user_id, session_id, domain, judgment_key, severity, explanation, explanation_llm, computed_at) VALUES
     (test_user_id, 'b1b2c3d4-0007-7890-abcd-ef1234567890', 'duration', 'sleep_time_sufficient', 'ok', 'Sleep time was sufficient', 'Sleep duration was within the healthy range (390 minutes, 98% of the usual 400 minutes).', NOW()),
     (test_user_id, 'b1b2c3d4-0007-7890-abcd-ef1234567890', 'continuity', 'sleep_minor_interruptions', 'warning', 'Sleep had minor interruptions', 'Sleep had some interruptions (3 awakenings, 15 minutes awake).', NOW()),
-    (test_user_id, 'b1b2c3d4-0007-7890-abcd-ef1234567890', 'stages', 'stages_balanced', 'ok', 'Sleep stages were balanced', 'Sleep stages were well balanced with 20% deep sleep and 20% REM sleep.', NOW()),
     (test_user_id, 'b1b2c3d4-0007-7890-abcd-ef1234567890', 'timing', 'schedule_inconsistent', 'poor', 'Sleep schedule was inconsistent', 'Sleep schedule was significantly inconsistent. Bedtime was about 150 minutes off from the usual pattern. Large timing shifts can disrupt circadian rhythm.', NOW());
 
     RAISE NOTICE 'Test student created successfully with 14 questionnaire responses, annotations, 7 sleep sessions, and sleep judgments';

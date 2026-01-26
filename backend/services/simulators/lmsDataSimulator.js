@@ -3,7 +3,7 @@
 // Uses the unified simulated_profile (high_achiever/average/low_achiever) system
 // Each subject (subject_1 to subject_4) is simulated independently but coherently
 
-import logger from '../utils/logger.js';
+import logger from '../../utils/logger.js';
 import { computeJudgments } from '../annotators/lmsAnnotationService.js';
 
 // =============================================================================

@@ -1,5 +1,5 @@
-// Screen Time Judgment Service
-// Rule-based computation engine that generates human-readable screen time judgments
+// Screen Time Annotation Service
+// Rule-based computation engine that generates human-readable screen time annotations
 // Modeled after sleepJudgmentService.js
 
 // =============================================================================
@@ -377,6 +377,88 @@ async function hasScreenTimeData(pool, userId) {
 }
 
 // =============================================================================
+// SCORING INTEGRATION
+// =============================================================================
+
+/**
+ * Get raw scores for scoring aggregation (0-100 per aspect)
+ * Uses actual session data to calculate continuous scores
+ * Lower screen time = higher score (inverted - less is better)
+ * 
+ * @param {Object} pool - Database connection pool
+ * @param {string} userId - User ID
+ * @returns {Promise<Array<{domain: string, score: number}>>}
+ */
+async function getRawScoresForScoring(pool, userId) {
+    const { rows } = await pool.query(
+        `SELECT sts.id as session_id, sts.total_screen_minutes, sts.baseline_screen_minutes,
+                sts.longest_continuous_session, sts.late_night_screen_minutes,
+                sts.number_of_screen_sessions
+         FROM public.screen_time_sessions sts
+         WHERE sts.user_id = $1
+         ORDER BY sts.session_date DESC
+         LIMIT 1`,
+        [userId]
+    );
+
+    if (rows.length === 0) return [];
+
+    const session = rows[0];
+    const baseline = session.baseline_screen_minutes || 300; // 5h default
+
+    // Volume score: Inverted - at/below baseline = 100, above = decreasing
+    // 100% of baseline = 100 points, 150% = 50 points, 200%+ = 0 points
+    const volumeRatio = session.total_screen_minutes / baseline;
+    let volumeScore;
+    if (volumeRatio <= 1.0) {
+        volumeScore = 100;
+    } else {
+        // Linear decrease from 100 to 0 as ratio goes from 1.0 to 2.0
+        volumeScore = Math.max(0, 100 - (volumeRatio - 1) * 100);
+    }
+
+    // Distribution score: Shorter continuous sessions = better
+    // 30 min or less = 100, 60 min = 80, 90 min = 60, 120+ = penalty
+    const longestSession = session.longest_continuous_session;
+    let distributionScore;
+    if (longestSession <= 30) {
+        distributionScore = 100;
+    } else if (longestSession <= 120) {
+        distributionScore = 100 - (longestSession - 30) * (40 / 90); // Scale 100->60
+    } else {
+        distributionScore = Math.max(0, 60 - (longestSession - 120) * 0.5);
+    }
+
+    // Late night score: Less late night = better
+    // 0 min = 100, 30 min = 70, 60 min = 40, 90+ = low
+    const lateNightMinutes = session.late_night_screen_minutes;
+    const lateNightScore = Math.max(0, 100 - lateNightMinutes * 1.0);
+
+    // Fetch judgments for labels
+    const { rows: judgments } = await pool.query(
+        `SELECT domain, explanation FROM public.screen_time_judgments WHERE session_id = $1`,
+        [session.session_id]
+    );
+    const judgmentMap = {};
+    judgments.forEach(j => judgmentMap[j.domain] = j.explanation);
+
+    return [
+        { domain: 'volume', score: Math.round(volumeScore * 100) / 100, label: judgmentMap['volume'] },
+        { domain: 'distribution', score: Math.round(distributionScore * 100) / 100, label: judgmentMap['distribution'] },
+        { domain: 'late_night', score: Math.round(lateNightScore * 100) / 100, label: judgmentMap['late_night'] }
+    ];
+}
+
+// Keep old function for backwards compatibility
+async function getSeveritiesForScoring(pool, userId) {
+    const rawScores = await getRawScoresForScoring(pool, userId);
+    return rawScores.map(r => ({
+        domain: r.domain,
+        severity: r.score >= 75 ? 'ok' : r.score >= 40 ? 'warning' : 'poor'
+    }));
+}
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -390,6 +472,10 @@ export {
     getJudgmentsForChatbot,
     hasScreenTimeData,
 
+    // Scoring integration
+    getSeveritiesForScoring,
+    getRawScoresForScoring,
+
     // Individual evaluators (for testing)
     evaluateVolume,
     evaluateDistribution,
@@ -400,3 +486,5 @@ export {
     DISTRIBUTION_THRESHOLDS,
     LATE_NIGHT_THRESHOLDS
 };
+
+

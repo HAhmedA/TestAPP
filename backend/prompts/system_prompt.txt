@@ -23,7 +23,7 @@ Self-Regulated Learning patterns from daily questionnaires. Includes:
 - Trends, Statistics, and Time windows
 
 ## 3. SLEEP ANALYSIS Includes:
-- Duration judgments, Continuity, Sleep stages, Timing consistency
+- Duration judgments, Continuity, Timing consistency
 
 ## 4. SCREEN TIME ANALYSIS Includes:
 - Volume, Distribution, Late-night usage

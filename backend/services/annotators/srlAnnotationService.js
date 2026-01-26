@@ -527,6 +527,59 @@ async function hasSRLData(pool, userId) {
     return parseInt(rows[0].count) > 0;
 }
 
+// =============================================================================
+// SCORING INTEGRATION
+// =============================================================================
+
+/**
+ * Get raw scores for scoring aggregation (0-100 per concept)
+ * SRL has 14 concepts, each with avg_score (1-5 scale)
+ * We convert directly: (avg_score - 1) / 4 * 100 = 0-100 score
+ * For inverted concepts (anxiety), we invert: (5 - avg_score) / 4 * 100
+ * 
+ * @param {Object} pool - Database connection pool
+ * @param {string} userId - User ID
+ * @returns {Promise<Array<{domain: string, score: number}>>}
+ */
+async function getRawScoresForScoring(pool, userId) {
+    const { rows } = await pool.query(
+        `SELECT concept_key, avg_score, is_inverted, annotation_text
+         FROM public.srl_annotations
+         WHERE user_id = $1 AND time_window = '7d' AND response_count > 0
+         ORDER BY concept_key`,
+        [userId]
+    );
+
+    return rows.map(r => {
+        const rawScore = parseFloat(r.avg_score);
+        let score;
+
+        if (r.is_inverted) {
+            // For anxiety: low score (1) is best (100), high score (5) is worst (0)
+            score = ((5 - rawScore) / 4) * 100;
+        } else {
+            // For normal concepts: high score (5) is best (100), low score (1) is worst (0)
+            score = ((rawScore - 1) / 4) * 100;
+        }
+
+        return {
+            domain: r.concept_key,
+            score: Math.round(score * 100) / 100, // Round to 2 decimals
+            label: r.annotation_text // Include qualitative text
+        };
+    });
+}
+
+// Keep old function for backwards compatibility, but mark deprecated
+async function getSeveritiesForScoring(pool, userId) {
+    console.warn('getSeveritiesForScoring is deprecated, use getRawScoresForScoring');
+    const rawScores = await getRawScoresForScoring(pool, userId);
+    return rawScores.map(r => ({
+        domain: r.domain,
+        severity: r.score >= 75 ? 'ok' : r.score >= 40 ? 'warning' : 'poor'
+    }));
+}
+
 export {
     calculateTrend,
     computeAnnotations,
@@ -534,6 +587,10 @@ export {
     getAnnotations,
     getAnnotationsForChatbot,
     hasSRLData,
+    getSeveritiesForScoring,
+    getRawScoresForScoring,
     INVERTED_CONCEPTS,
     CONCEPT_SHORT_NAMES
 };
+
+
