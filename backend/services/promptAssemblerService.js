@@ -341,10 +341,14 @@ CURRENT SESSION:
 This is a ${userType}. Generate a personalized greeting following the Greeting Rules.
 `
 
-    return [
+    const messages = [
         { role: 'system', content: assembledSystem },
         { role: 'user', content: "Hello, I just opened the chat. Please greet me and briefly summarize my data in bulletpoints. Please, provide few personalized recommendations that aligns with my charachteristics in bulletpoints." }
     ]
+
+    logger.info(`FULL INITIAL GREETING PROMPT for ${userId}:\n${JSON.stringify(messages, null, 2)}`)
+
+    return messages
 }
 
 /**

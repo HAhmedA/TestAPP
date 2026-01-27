@@ -33,16 +33,31 @@ async function getOrAssignProfile(pool, userId) {
         return rows[0].simulated_profile;
     }
 
-    // Assign random profile with weighted distribution
-    // 30% high achiever, 50% average, 20% low achiever
-    const random = Math.random();
-    let profile;
-    if (random < 0.30) {
-        profile = 'high_achiever'; // Effective Self-Regulation
-    } else if (random < 0.80) {
-        profile = 'average';       // Inconsistent Self-Regulation
-    } else {
-        profile = 'low_achiever';  // Limited Self-Regulation
+    // Cyclic Profile Assignment (High -> Average -> Low)
+    // We check the most recently assigned profile globally to ensure rotation for testing
+    const lastProfileResult = await pool.query(
+        `SELECT simulated_profile FROM public.student_profiles 
+         WHERE simulated_profile IS NOT NULL 
+         ORDER BY updated_at DESC LIMIT 1`
+    );
+
+    let profile = 'high_achiever'; // Default start
+
+    if (lastProfileResult.rows.length > 0) {
+        const lastProfile = lastProfileResult.rows[0].simulated_profile;
+        switch (lastProfile) {
+            case 'high_achiever':
+                profile = 'average';
+                break;
+            case 'average':
+                profile = 'low_achiever';
+                break;
+            case 'low_achiever':
+                profile = 'high_achiever';
+                break;
+            default:
+                profile = 'high_achiever';
+        }
     }
 
     // Upsert profile

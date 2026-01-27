@@ -404,35 +404,58 @@ async function getRawScoresForScoring(pool, userId) {
     if (rows.length === 0) return [];
 
     const session = rows[0];
-    const baseline = session.baseline_screen_minutes || 300; // 5h default
 
-    // Volume score: Inverted - at/below baseline = 100, above = decreasing
-    // 100% of baseline = 100 points, 150% = 50 points, 200%+ = 0 points
-    const volumeRatio = session.total_screen_minutes / baseline;
+
+    // 1. Volume Score (Absolute Thresholds)
+    // < 120m (2h) = Excellent (90-100)
+    // < 240m (4h) = Good (75-90)
+    // < 360m (6h) = Fair (60-75)
+    // < 480m (8h) = Poor (40-60)
+    // > 480m = Very Poor (< 40)
+    const minutes = session.total_screen_minutes;
     let volumeScore;
-    if (volumeRatio <= 1.0) {
-        volumeScore = 100;
+    if (minutes <= 120) {
+        volumeScore = 100 - (minutes / 120) * 10; // 100 -> 90
+    } else if (minutes <= 240) {
+        volumeScore = 90 - ((minutes - 120) / 120) * 15; // 90 -> 75
+    } else if (minutes <= 360) {
+        volumeScore = 75 - ((minutes - 240) / 120) * 15; // 75 -> 60
+    } else if (minutes <= 480) {
+        volumeScore = 60 - ((minutes - 360) / 120) * 20; // 60 -> 40
     } else {
-        // Linear decrease from 100 to 0 as ratio goes from 1.0 to 2.0
-        volumeScore = Math.max(0, 100 - (volumeRatio - 1) * 100);
+        volumeScore = Math.max(0, 40 - ((minutes - 480) / 120) * 20); // 40 -> 0
     }
 
-    // Distribution score: Shorter continuous sessions = better
-    // 30 min or less = 100, 60 min = 80, 90 min = 60, 120+ = penalty
+    // 2. Distribution Score (Session Length)
+    // < 30m = Excellent (100)
+    // 30-45m = Good (85-100)
+    // 45-90m = Fair (60-85)
+    // > 90m = Poor (< 60)
     const longestSession = session.longest_continuous_session;
     let distributionScore;
     if (longestSession <= 30) {
         distributionScore = 100;
-    } else if (longestSession <= 120) {
-        distributionScore = 100 - (longestSession - 30) * (40 / 90); // Scale 100->60
+    } else if (longestSession <= 45) {
+        distributionScore = 100 - ((longestSession - 30) / 15) * 15; // 100 -> 85
+    } else if (longestSession <= 90) {
+        distributionScore = 85 - ((longestSession - 45) / 45) * 25; // 85 -> 60
     } else {
-        distributionScore = Math.max(0, 60 - (longestSession - 120) * 0.5);
+        distributionScore = Math.max(0, 60 - ((longestSession - 90) / 60) * 30); // 60 -> 30 at 150m
     }
 
-    // Late night score: Less late night = better
-    // 0 min = 100, 30 min = 70, 60 min = 40, 90+ = low
+    // 3. Late Night Score (Absolute Thresholds)
+    // < 15m = Excellent (90-100)
+    // 15-45m = Fair/Good (60-90)
+    // > 45m = Poor (< 60)
     const lateNightMinutes = session.late_night_screen_minutes;
-    const lateNightScore = Math.max(0, 100 - lateNightMinutes * 1.0);
+    let lateNightScore;
+    if (lateNightMinutes <= 15) {
+        lateNightScore = 100 - (lateNightMinutes / 15) * 10; // 100 -> 90
+    } else if (lateNightMinutes <= 45) {
+        lateNightScore = 90 - ((lateNightMinutes - 15) / 30) * 30; // 90 -> 60
+    } else {
+        lateNightScore = Math.max(0, 60 - ((lateNightMinutes - 45) / 60) * 40); // 60 -> 20 at 105m
+    }
 
     // Fetch judgments for labels
     const { rows: judgments } = await pool.query(

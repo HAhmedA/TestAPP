@@ -80,7 +80,7 @@ function evaluateActivityVolume(metrics, baseline) {
         return {
             key: 'volume_moderate',
             label: 'LMS activity was moderate',
-            variation: 'Limited engagement with this subject'
+            variation: 'Moderate engagement with this subject'
         };
     }
     return {
