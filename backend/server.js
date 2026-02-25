@@ -15,6 +15,7 @@ import { seedTestAccountData } from './services/seedDataService.js'
 import { specs } from './config/swagger.js'
 import { apiLimiter } from './middleware/rateLimit.js'
 import { validateEnvironment } from './config/envValidation.js'
+import { startCronJobs } from './services/cronService.js'
 
 const app = express()
 const isProduction = process.env.NODE_ENV === 'production'
@@ -112,8 +113,11 @@ app.listen(PORT, async () => {
     logger.error('Failed to initialize fixed survey:', e.message)
   }
 
-  // Generate simulated data for seed test accounts (runs in background)
+  // Generate simulated data for seed test accounts (skipped when SIMULATION_MODE=false)
   seedTestAccountData().catch(e => {
     logger.error('Failed to seed test account data:', e.message)
   })
+
+  // Start nightly background jobs
+  startCronJobs()
 })

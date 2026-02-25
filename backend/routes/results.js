@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import pool from '../config/database.js'
 import logger from '../utils/logger.js'
 import { saveResponses, computeAnnotations } from '../services/annotators/srlAnnotationService.js'
+import { computeAllScores } from '../services/scoring/scoreComputationService.js'
 
 const router = Router()
 
@@ -33,6 +34,9 @@ router.post('/post', async (req, res) => {
                 // Compute and cache annotations for this user
                 await computeAnnotations(pool, userId, surveyStructure)
             }
+
+            // Trigger full score recomputation in background (do not await)
+            computeAllScores(userId).catch(err => logger.error('Score recomputation error after SRL submit:', err))
         }
 
         logger.info(`Survey response submitted for ${postId}`)

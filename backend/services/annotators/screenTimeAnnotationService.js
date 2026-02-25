@@ -288,73 +288,91 @@ async function recomputeBaseline(pool, userId, days = 7) {
  * @param {string} userId - User ID
  * @returns {string} - Formatted markdown for prompt assembly
  */
+/**
+ * Get formatted screen time analysis for chatbot prompt.
+ * Cluster-aware, baseline-free: factual description + peer context (internal only)
+ * + today-vs-yesterday comparison.
+ *
+ * @param {Object} pool - Database connection pool
+ * @param {string} userId - User ID
+ * @returns {Promise<string>} - Formatted markdown for prompt assembly
+ */
 async function getJudgmentsForChatbot(pool, userId) {
-    // Get recent judgments (last 7 days)
-    const { rows: judgments } = await pool.query(
-        `SELECT stj.*, sts.session_date
-         FROM public.screen_time_judgments stj
-         JOIN public.screen_time_sessions sts ON stj.session_id = sts.id
-         WHERE stj.user_id = $1 AND sts.session_date >= CURRENT_DATE - INTERVAL '7 days'
-         ORDER BY sts.session_date DESC, stj.domain`,
+    // Fetch last 8 days of screen time sessions
+    const { rows: sessions } = await pool.query(
+        `SELECT session_date,
+                total_screen_minutes, longest_continuous_session, late_night_screen_minutes
+         FROM public.screen_time_sessions
+         WHERE user_id = $1
+         ORDER BY session_date DESC
+         LIMIT 8`,
         [userId]
     );
 
-    if (judgments.length === 0) {
+    if (sessions.length === 0) {
         return 'No screen time data available for this student.';
     }
 
-    // Group by recency
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Fetch peer cluster context (if available)
+    const { rows: clusterRows } = await pool.query(
+        `SELECT uca.percentile_position, pc.p5, pc.p50, pc.p95
+         FROM public.user_cluster_assignments uca
+         JOIN public.peer_clusters pc
+           ON pc.concept_id = uca.concept_id AND pc.cluster_index = uca.cluster_index
+         WHERE uca.user_id = $1 AND uca.concept_id = 'screen_time'`,
+        [userId]
+    );
 
-    const last24h = judgments.filter(j => {
-        const sessionDate = new Date(j.session_date);
-        const diffDays = Math.floor((today - sessionDate) / (1000 * 60 * 60 * 24));
-        return diffDays <= 1;
-    });
+    const recent = sessions[0];
+    const previous = sessions[1] || null;
 
-    const last7d = judgments;
+    const toMin = (m) => m != null ? `${Math.round(m)} min` : 'N/A';
+    const toHours = (m) => m != null ? `${(m / 60).toFixed(1)}h` : 'N/A';
 
     let result = '## Screen Time Analysis\n\n';
 
-    // Most recent day
-    if (last24h.length > 0) {
-        result += '### Yesterday:\n';
-        // Group by unique session
-        const recentSession = last24h.filter(j => j.session_date === last24h[0].session_date);
-        recentSession.forEach(j => {
-            result += `- ${j.explanation_llm}\n`;
-        });
-        result += '\n';
+    // Internal peer context block (for LLM calibration only)
+    if (clusterRows.length > 0) {
+        const c = clusterRows[0];
+        const pct = c.percentile_position != null ? Math.round(parseFloat(c.percentile_position)) : null;
+        result += `[Internal context — do not share with student]\n`;
+        result += `Peer context: Typical daily screen time for students with similar usage patterns is `;
+        result += `${toHours(c.p5)}–${toHours(c.p95)}, median ${toHours(c.p50)}. `;
+        if (pct != null) {
+            result += `Student is at the ${pct}th percentile (lower = less screen time = better for this metric).\n\n`;
+        } else {
+            result += '\n\n';
+        }
     }
 
-    // Weekly summary (aggregate severity counts)
-    const severityCounts = { ok: 0, warning: 0, poor: 0 };
-    last7d.forEach(j => severityCounts[j.severity]++);
+    // Most recent day
+    result += `### Yesterday (${recent.session_date}):\n`;
+    result += `- Total screen time: ${toHours(recent.total_screen_minutes)}`;
+    if (previous) {
+        const diff = recent.total_screen_minutes - previous.total_screen_minutes;
+        result += ` (${diff > 0 ? '+' : ''}${toHours(Math.abs(diff))} vs. day before: ${toHours(previous.total_screen_minutes)})`;
+    }
+    result += '\n';
+    result += `- Longest continuous session: ${toMin(recent.longest_continuous_session)}`;
+    if (previous) {
+        const diff = recent.longest_continuous_session - previous.longest_continuous_session;
+        result += ` (${diff > 0 ? 'longer' : 'shorter'} than previous: ${toMin(previous.longest_continuous_session)})`;
+    }
+    result += '\n';
+    result += `- Screen time before sleep: ${toMin(recent.late_night_screen_minutes)}`;
+    if (previous) {
+        const diff = recent.late_night_screen_minutes - previous.late_night_screen_minutes;
+        result += ` (${diff > 0 ? 'more' : 'less'} than previous night: ${toMin(previous.late_night_screen_minutes)})`;
+    }
+    result += '\n';
 
-    const totalJudgments = last7d.length;
-    const uniqueDays = new Set(last7d.map(j => j.session_date)).size;
-
-    if (uniqueDays > 1) {
-        result += `### Past 7 Days (${uniqueDays} days tracked):\n`;
-
-        if (severityCounts.poor > 0) {
-            const poorJudgments = last7d.filter(j => j.severity === 'poor');
-            const poorDomains = [...new Set(poorJudgments.map(j => j.domain))];
-            result += `- Concerns in: ${poorDomains.join(', ')}\n`;
-        }
-
-        if (severityCounts.warning > 0) {
-            const warningJudgments = last7d.filter(j => j.severity === 'warning');
-            const warningDomains = [...new Set(warningJudgments.map(j => j.domain))];
-            result += `- Minor issues with: ${warningDomains.join(', ')}\n`;
-        }
-
-        if (severityCounts.ok > totalJudgments * 0.7) {
-            result += `- Overall screen time habits are healthy\n`;
-        } else if (severityCounts.poor > totalJudgments * 0.3) {
-            result += `- Screen time patterns could use improvement\n`;
-        }
+    // Weekly trend
+    if (sessions.length > 1) {
+        const avgTotal = sessions.reduce((s, r) => s + (r.total_screen_minutes || 0), 0) / sessions.length;
+        const avgPreSleep = sessions.reduce((s, r) => s + (r.late_night_screen_minutes || 0), 0) / sessions.length;
+        result += `\n### Past ${sessions.length} days:\n`;
+        result += `- Average screen time: ${toHours(avgTotal)}/day\n`;
+        result += `- Average pre-sleep usage: ${toMin(avgPreSleep)}/night\n`;
     }
 
     return result;
@@ -386,7 +404,9 @@ async function getRawScoresForScoring(pool, userId) {
     const { computeClusterScores } = await import('../scoring/clusterPeerService.js');
     const clusterResult = await computeClusterScores(pool, 'screen_time', userId);
 
-    if (!clusterResult || !clusterResult.domains) return [];
+    if (!clusterResult) return [];
+    if (clusterResult.coldStart) return [{ coldStart: true }];
+    if (!clusterResult.domains) return [];
 
     // Fetch judgment labels for the most recent session
     const { rows } = await pool.query(

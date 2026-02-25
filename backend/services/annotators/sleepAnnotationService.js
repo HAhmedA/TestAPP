@@ -342,79 +342,100 @@ async function recomputeBaseline(pool, userId, days = 7) {
 // =============================================================================
 
 /**
- * Get formatted sleep judgments for chatbot prompt
- * Similar to getAnnotationsForChatbot in annotationService.js
- * 
+ * Get formatted sleep analysis for chatbot prompt.
+ * Cluster-aware, baseline-free: describes what the student actually did,
+ * includes peer context (internal only), and today-vs-yesterday comparison.
+ *
  * @param {Object} pool - Database connection pool
  * @param {string} userId - User ID
- * @returns {string} - Formatted markdown for prompt assembly
+ * @returns {Promise<string>} - Formatted markdown for prompt assembly
  */
 async function getJudgmentsForChatbot(pool, userId) {
-    // Get recent judgments (last 7 days)
-    const { rows: judgments } = await pool.query(
-        `SELECT sj.*, ss.session_date
-         FROM public.sleep_judgments sj
-         JOIN public.sleep_sessions ss ON sj.session_id = ss.id
-         WHERE sj.user_id = $1 AND ss.session_date >= CURRENT_DATE - INTERVAL '7 days'
-         ORDER BY ss.session_date DESC, sj.domain`,
+    // Fetch last 8 nights so we can compare today (most recent) to yesterday
+    const { rows: sessions } = await pool.query(
+        `SELECT session_date,
+                total_sleep_minutes, awakenings_count, awake_minutes,
+                bedtime, wake_time
+         FROM public.sleep_sessions
+         WHERE user_id = $1
+         ORDER BY session_date DESC
+         LIMIT 8`,
         [userId]
     );
 
-    if (judgments.length === 0) {
+    if (sessions.length === 0) {
         return 'No sleep data available for this student.';
     }
 
-    // Group by recency
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Fetch peer cluster context (if available)
+    const { rows: clusterRows } = await pool.query(
+        `SELECT uca.percentile_position, pc.p5, pc.p50, pc.p95
+         FROM public.user_cluster_assignments uca
+         JOIN public.peer_clusters pc
+           ON pc.concept_id = uca.concept_id AND pc.cluster_index = uca.cluster_index
+         WHERE uca.user_id = $1 AND uca.concept_id = 'sleep'`,
+        [userId]
+    );
 
-    const last24h = judgments.filter(j => {
-        const sessionDate = new Date(j.session_date);
-        const diffDays = Math.floor((today - sessionDate) / (1000 * 60 * 60 * 24));
-        return diffDays <= 1;
-    });
+    const recent = sessions[0];
+    const previous = sessions[1] || null;
 
-    const last7d = judgments;
+    const toHours = (min) => min ? `${(min / 60).toFixed(1)}h` : 'N/A';
+    const fmtTime = (ts) => {
+        if (!ts) return 'N/A';
+        const d = new Date(ts);
+        return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    };
 
     let result = '## Sleep Analysis\n\n';
 
-    // Most recent night
-    if (last24h.length > 0) {
-        result += '### Last Night:\n';
-        // Group by unique session
-        const recentSession = last24h.filter(j => j.session_date === last24h[0].session_date);
-        recentSession.forEach(j => {
-            result += `- ${j.explanation_llm}\n`;
-        });
-        result += '\n';
+    // Internal peer context block (for LLM calibration only)
+    if (clusterRows.length > 0) {
+        const c = clusterRows[0];
+        const pct = c.percentile_position != null ? Math.round(parseFloat(c.percentile_position)) : null;
+        result += `[Internal context — do not share with student]\n`;
+        result += `Peer context: Typical sleep range for students with similar patterns is `;
+        result += `${toHours(c.p5)}–${toHours(c.p95)}, median ${toHours(c.p50)}. `;
+        if (pct != null) {
+            result += `Student is currently at the ${pct}th percentile within this group.\n\n`;
+        } else {
+            result += '\n\n';
+        }
     }
 
-    // Weekly summary (aggregate severity counts)
-    const severityCounts = { ok: 0, warning: 0, poor: 0 };
-    last7d.forEach(j => severityCounts[j.severity]++);
+    // Most recent night
+    result += `### Last night (${recent.session_date}):\n`;
+    result += `- Duration: ${toHours(recent.total_sleep_minutes)} sleep`;
+    if (previous) {
+        const diff = recent.total_sleep_minutes - previous.total_sleep_minutes;
+        const diffStr = diff >= 0 ? `+${toHours(Math.abs(diff))}` : `-${toHours(Math.abs(diff))}`;
+        result += ` (${diff >= 0 ? 'more' : 'less'} than previous night: ${toHours(previous.total_sleep_minutes)}, Δ ${diffStr})`;
+    }
+    result += '\n';
+    result += `- Continuity: ${recent.awakenings_count} awakenings, ${recent.awake_minutes} min awake`;
+    if (previous) {
+        const wakeChange = recent.awakenings_count - previous.awakenings_count;
+        result += ` (${wakeChange <= 0 ? 'fewer' : 'more'} awakenings than previous night: ${previous.awakenings_count})`;
+    }
+    result += '\n';
+    result += `- Bedtime: ${fmtTime(recent.bedtime)} → wake ${fmtTime(recent.wake_time)}\n`;
 
-    const totalJudgments = last7d.length;
-    const uniqueDays = new Set(last7d.map(j => j.session_date)).size;
+    // Weekly trend (if more than 1 night)
+    if (sessions.length > 1) {
+        const avgSleep = sessions.reduce((s, r) => s + (r.total_sleep_minutes || 0), 0) / sessions.length;
+        const avgAwakenings = sessions.reduce((s, r) => s + (r.awakenings_count || 0), 0) / sessions.length;
+        result += `\n### Past ${sessions.length} nights:\n`;
+        result += `- Average sleep: ${toHours(avgSleep)}/night\n`;
+        result += `- Average awakenings: ${avgAwakenings.toFixed(1)}/night\n`;
 
-    if (uniqueDays > 1) {
-        result += `### Past 7 Days (${uniqueDays} nights tracked):\n`;
-
-        if (severityCounts.poor > 0) {
-            const poorJudgments = last7d.filter(j => j.severity === 'poor');
-            const poorDomains = [...new Set(poorJudgments.map(j => j.domain))];
-            result += `- Areas needing attention: ${poorDomains.join(', ')}\n`;
-        }
-
-        if (severityCounts.warning > 0) {
-            const warningJudgments = last7d.filter(j => j.severity === 'warning');
-            const warningDomains = [...new Set(warningJudgments.map(j => j.domain))];
-            result += `- Minor concerns in: ${warningDomains.join(', ')}\n`;
-        }
-
-        if (severityCounts.ok > totalJudgments * 0.7) {
-            result += `- Overall sleep quality has been good\n`;
-        } else if (severityCounts.poor > totalJudgments * 0.3) {
-            result += `- Sleep quality could use improvement\n`;
+        // Bedtime consistency
+        const bedtimeHours = sessions
+            .map(s => s.bedtime ? new Date(s.bedtime).getHours() + new Date(s.bedtime).getMinutes() / 60 : null)
+            .filter(h => h != null);
+        if (bedtimeHours.length > 1) {
+            const mean = bedtimeHours.reduce((a, b) => a + b, 0) / bedtimeHours.length;
+            const stdDev = Math.sqrt(bedtimeHours.reduce((s, h) => s + (h - mean) ** 2, 0) / bedtimeHours.length);
+            result += `- Bedtime consistency: ±${Math.round(stdDev * 60)} min variance\n`;
         }
     }
 
@@ -447,7 +468,9 @@ async function getRawScoresForScoring(pool, userId) {
     const { computeClusterScores } = await import('../scoring/clusterPeerService.js');
     const clusterResult = await computeClusterScores(pool, 'sleep', userId);
 
-    if (!clusterResult || !clusterResult.domains) return [];
+    if (!clusterResult) return [];
+    if (clusterResult.coldStart) return [{ coldStart: true }];
+    if (!clusterResult.domains) return [];
 
     // Fetch judgment labels for the most recent session
     const { rows } = await pool.query(

@@ -51,6 +51,12 @@ async function computeConceptScore(userId, conceptId) {
             return null;
         }
 
+        // Cold start: not enough users in the pool yet for meaningful clustering.
+        if (rawScores.length === 1 && rawScores[0].coldStart) {
+            logger.info(`Cold start for ${conceptId} (user: ${userId}) — skipping score storage`);
+            return { coldStart: true };
+        }
+
         const result = await computeAndStoreRawScore(userId, conceptId, rawScores);
         return result;
 

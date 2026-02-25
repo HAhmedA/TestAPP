@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
         }
 
         const { rows } = await pool.query(
-            'SELECT user_id, edu_level, field_of_study, major, learning_formats, disabilities, updated_at FROM public.student_profiles WHERE user_id = $1',
+            'SELECT user_id, edu_level, field_of_study, major, learning_formats, disabilities, onboarding_completed, updated_at FROM public.student_profiles WHERE user_id = $1',
             [userId]
         )
 
@@ -63,6 +63,30 @@ router.put('/', async (req, res) => {
         res.json(rows[0])
     } catch (e) {
         logger.error('Update profile error:', e)
+        res.status(500).json({ error: 'db_error', details: String(e) })
+    }
+})
+
+// Mark onboarding as complete
+router.post('/onboarding-complete', async (req, res) => {
+    try {
+        const userId = req.session.user?.id
+        if (!userId) {
+            return res.status(401).json({ error: 'unauthorized' })
+        }
+
+        await pool.query(
+            `INSERT INTO public.student_profiles (user_id, onboarding_completed, updated_at)
+             VALUES ($1, true, NOW())
+             ON CONFLICT (user_id)
+             DO UPDATE SET onboarding_completed = true, updated_at = NOW()`,
+            [userId]
+        )
+
+        logger.info(`Onboarding completed for user: ${userId}`)
+        res.json({ success: true })
+    } catch (e) {
+        logger.error('Onboarding complete error:', e)
         res.status(500).json({ error: 'db_error', details: String(e) })
     }
 })

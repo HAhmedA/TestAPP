@@ -746,6 +746,11 @@ function computeCompositeScore(userMetrics, allMetrics, dims) {
  * @param {number} days - Look-back window (default 7)
  * @returns {Object} { clusterLabel, percentileScore, dialMin, dialCenter, dialMax, domains: [...] }
  */
+// Minimum number of real users required before PGMoE clustering is meaningful.
+// Below this threshold the system returns { coldStart: true } and the dashboard
+// shows a "Building your profile" placeholder instead of the gauge.
+const MIN_CLUSTER_USERS = 10;
+
 async function computeClusterScores(dbPool, conceptId, userId, days = 7) {
     const allMetrics = await getAllUserMetrics(conceptId, days);
 
@@ -756,6 +761,11 @@ async function computeClusterScores(dbPool, conceptId, userId, days = 7) {
 
     // SRL is special — variable dimensions
     if (conceptId === 'srl') {
+        const userCount = Object.keys(allMetrics).length;
+        if (userCount < MIN_CLUSTER_USERS) {
+            logger.info(`clusterPeerService: cold start for SRL (${userCount}/${MIN_CLUSTER_USERS} users)`);
+            return { coldStart: true };
+        }
         return computeSRLClusterScores(allMetrics, userId);
     }
 
@@ -763,6 +773,12 @@ async function computeClusterScores(dbPool, conceptId, userId, days = 7) {
     if (!dims) return null;
 
     const userIds = Object.keys(allMetrics);
+
+    // Cold start: not enough real users to form meaningful clusters yet.
+    if (userIds.length < MIN_CLUSTER_USERS) {
+        logger.info(`clusterPeerService: cold start for ${conceptId} (${userIds.length}/${MIN_CLUSTER_USERS} users)`);
+        return { coldStart: true };
+    }
     const dimKeys = Object.keys(dims);
 
     // Build feature matrix for clustering (N users x D dimensions)

@@ -16,7 +16,8 @@ const REQUIRED_PRODUCTION_ENV = {
 const RECOMMENDED_ENV = {
     CORS_ORIGINS: 'Allowed CORS origins (comma-separated)',
     LLM_BASE_URL: 'LLM API base URL',
-    LLM_MAIN_MODEL: 'Main LLM model name'
+    LLM_MAIN_MODEL: 'Main LLM model name',
+    SIMULATION_MODE: 'Set to "false" to disable simulators and exclude test data from clustering (default: "true")'
 }
 
 /**

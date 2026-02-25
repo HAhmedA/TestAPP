@@ -3,6 +3,7 @@ import { Router } from 'express'
 import pool from '../config/database.js'
 import logger from '../utils/logger.js'
 import { requireAuth } from '../middleware/auth.js'
+import { computeAllScores } from '../services/scoring/scoreComputationService.js'
 
 const router = Router()
 
@@ -135,6 +136,9 @@ router.post('/', async (req, res) => {
             [userId, sessionDate, bedtimeDate.toISOString(), wakeDate.toISOString(),
                 totalSleepMinutes, timeInBedMinutes, awakeningsCount, awakeMinutes]
         )
+
+        // Trigger score recomputation in background (do not await)
+        computeAllScores(userId).catch(err => logger.error('Score recomputation error after sleep submit:', err))
 
         return res.json({ entry: upsertResult.rows[0] })
     } catch (e) {

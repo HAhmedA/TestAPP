@@ -382,24 +382,69 @@ async function getOrCreateBaseline(pool, userId) {
 /**
  * Get judgments for chatbot Integration
  */
+/**
+ * Get formatted LMS analysis for chatbot prompt.
+ * Returns a placeholder when no LMS data is available (integration pending).
+ * When data exists, includes peer context (internal only) and weekly patterns.
+ *
+ * @param {Object} pool - Database connection pool
+ * @param {string} userId - User ID
+ * @returns {Promise<string>} - Formatted markdown for prompt assembly
+ */
 async function getJudgmentsForChatbot(pool, userId) {
-    // Get latest judgment
-    const { rows } = await pool.query(
-        `SELECT * FROM public.lms_judgments 
-         WHERE user_id = $1 
-         AND period_end = CURRENT_DATE
-         LIMIT 1`,
+    // Fetch last 7 days of LMS sessions
+    const { rows: sessions } = await pool.query(
+        `SELECT session_date, total_active_minutes, number_of_sessions,
+                reading_minutes, watching_minutes
+         FROM public.lms_sessions
+         WHERE user_id = $1
+         ORDER BY session_date DESC
+         LIMIT 7`,
         [userId]
     );
 
-    if (rows.length === 0) {
-        return "No LMS activity data available yet.";
+    if (sessions.length === 0) {
+        return 'LMS Activity Analysis: LMS data is not yet available for this student. ' +
+               'If the student asks about their LMS activity, let them know this feature is coming soon ' +
+               'and focus the conversation on the data that is available (sleep, screen time, SRL).';
     }
 
-    const row = rows[0];
-    let result = "## LMS Activity Analysis\n";
-    result += `- ${row.sentence_1}\n`;
-    result += `- ${row.sentence_2}\n`;
+    // Fetch peer cluster context (if available)
+    const { rows: clusterRows } = await pool.query(
+        `SELECT uca.percentile_position, pc.p5, pc.p50, pc.p95
+         FROM public.user_cluster_assignments uca
+         JOIN public.peer_clusters pc
+           ON pc.concept_id = uca.concept_id AND pc.cluster_index = uca.cluster_index
+         WHERE uca.user_id = $1 AND uca.concept_id = 'lms'`,
+        [userId]
+    );
+
+    const toMin = (m) => m != null ? `${Math.round(m)} min` : 'N/A';
+
+    let result = '## LMS Activity Analysis\n\n';
+
+    // Internal peer context block
+    if (clusterRows.length > 0) {
+        const c = clusterRows[0];
+        const pct = c.percentile_position != null ? Math.round(parseFloat(c.percentile_position)) : null;
+        result += `[Internal context — do not share with student]\n`;
+        result += `Peer context: Typical weekly LMS engagement for students with similar patterns is `;
+        result += `${toMin(c.p5)}–${toMin(c.p95)} total active time, median ${toMin(c.p50)}. `;
+        if (pct != null) result += `Student is at the ${pct}th percentile within this group.\n\n`;
+        else result += '\n\n';
+    }
+
+    const totalActive = sessions.reduce((s, r) => s + (r.total_active_minutes || 0), 0);
+    const totalSessions = sessions.reduce((s, r) => s + (r.number_of_sessions || 0), 0);
+    const activeDays = new Set(sessions.map(s => s.session_date)).size;
+    const totalPassive = sessions.reduce((s, r) => s + (r.reading_minutes || 0) + (r.watching_minutes || 0), 0);
+    const activePercent = totalActive > 0 ? Math.round(((totalActive - totalPassive) / totalActive) * 100) : 0;
+
+    result += `### Past 7 days:\n`;
+    result += `- Active days: ${activeDays}/7\n`;
+    result += `- Total active time: ${toMin(totalActive)}\n`;
+    result += `- Total sessions: ${totalSessions}\n`;
+    result += `- Active vs. passive: ${activePercent}% active engagement\n`;
 
     return result;
 }
@@ -412,7 +457,9 @@ async function getRawScoresForScoring(pool, userId) {
     const { computeClusterScores } = await import('../scoring/clusterPeerService.js');
     const clusterResult = await computeClusterScores(pool, 'lms', userId);
 
-    if (!clusterResult || !clusterResult.domains) return [];
+    if (!clusterResult) return [];
+    if (clusterResult.coldStart) return [{ coldStart: true }];
+    if (!clusterResult.domains) return [];
 
     // Fetch judgment labels to attach to each domain
     const { rows } = await pool.query(

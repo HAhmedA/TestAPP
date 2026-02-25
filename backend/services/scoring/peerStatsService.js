@@ -10,6 +10,12 @@
 import pool from '../../config/database.js';
 import logger from '../../utils/logger.js';
 
+// When SIMULATION_MODE is explicitly set to 'false', exclude all data from test accounts
+// (users with a simulated_profile) so they don't pollute real-user clustering.
+const EXCLUDE_SIMULATED_USERS = process.env.SIMULATION_MODE === 'false'
+    ? `AND user_id NOT IN (SELECT user_id FROM public.student_profiles WHERE simulated_profile IS NOT NULL)`
+    : ''
+
 // =============================================================================
 // CATEGORY MAPPING
 // =============================================================================
@@ -84,6 +90,7 @@ async function getLMSMetrics(days) {
                     ELSE 0 END as avg_session_duration
         FROM public.lms_sessions
         WHERE session_date >= CURRENT_DATE - INTERVAL '${days} days'
+        ${EXCLUDE_SIMULATED_USERS}
         GROUP BY user_id
     `);
 
@@ -114,6 +121,7 @@ async function getSleepMetrics(days) {
                STDDEV_POP(EXTRACT(HOUR FROM bedtime) + EXTRACT(MINUTE FROM bedtime) / 60.0) as bedtime_stddev
         FROM public.sleep_sessions
         WHERE session_date >= CURRENT_DATE - INTERVAL '${days} days'
+        ${EXCLUDE_SIMULATED_USERS}
         GROUP BY user_id
     `);
 
@@ -138,6 +146,7 @@ async function getScreenTimeMetrics(days) {
                AVG(late_night_screen_minutes) as avg_late_night
         FROM public.screen_time_sessions
         WHERE session_date >= CURRENT_DATE - INTERVAL '${days} days'
+        ${EXCLUDE_SIMULATED_USERS}
         GROUP BY user_id
     `);
 
@@ -158,6 +167,7 @@ async function getSRLMetrics() {
         SELECT user_id, concept_key, avg_score, is_inverted
         FROM public.srl_annotations
         WHERE time_window = '7d' AND response_count > 0
+        ${EXCLUDE_SIMULATED_USERS}
         ORDER BY user_id, concept_key
     `);
 

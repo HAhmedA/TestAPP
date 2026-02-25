@@ -479,28 +479,44 @@ async function getAnnotations(pool, userId, timeWindow = null, forLLM = false) {
  * - Shows 7d section ONLY if there are responses from more than 1 distinct day
  *   (to avoid duplication when all data is from today)
  */
+/**
+ * Get formatted SRL analysis for chatbot prompt.
+ * Includes peer context block (internal only) for LLM calibration.
+ * Factually describes the student's self-reported learning patterns.
+ */
 async function getAnnotationsForChatbot(pool, userId) {
     const annotations = await getAnnotations(pool, userId, null, true);
 
     // Filter out annotations with no actual data (responseCount === 0)
-    // This prevents the LLM from seeing "empty" records and hallucinating values
     const validAnnotations = annotations.filter(a => a.responseCount > 0);
 
     if (validAnnotations.length === 0) {
         return 'No questionnaire data available for this student.';
     }
 
-    // Group by time window
-    // Group by time window
-    const by7d = validAnnotations.filter(a => a.timeWindow === '7d');
-
-    // Check if 7-day data has responses from multiple days
-    // If all 7d data is from only 1 day, it's the same as 24h data - don't duplicate
-    const has7dMultipleDays = by7d.some(a => a.distinctDayCount && a.distinctDayCount > 1);
+    // Fetch SRL peer cluster context (if available)
+    const { rows: clusterRows } = await pool.query(
+        `SELECT uca.percentile_position, pc.p5, pc.p50, pc.p95
+         FROM public.user_cluster_assignments uca
+         JOIN public.peer_clusters pc
+           ON pc.concept_id = uca.concept_id AND pc.cluster_index = uca.cluster_index
+         WHERE uca.user_id = $1 AND uca.concept_id = 'srl'`,
+        [userId]
+    );
 
     let result = '## Student Self-Regulated Learning Status\n\n';
 
-    // Only show 7-day section if there's data from multiple distinct days
+    // Internal peer context block (for LLM calibration only)
+    if (clusterRows.length > 0) {
+        const c = clusterRows[0];
+        const pct = c.percentile_position != null ? Math.round(parseFloat(c.percentile_position)) : null;
+        result += `[Internal context — do not share with student]\n`;
+        result += `Peer context: Student is at the ${pct != null ? pct + 'th' : 'unknown'} percentile `;
+        result += `among students with similar SRL patterns (scale 0–100, higher = stronger self-regulation).\n\n`;
+    }
+
+    // Show 7-day data (primary window)
+    const by7d = validAnnotations.filter(a => a.timeWindow === '7d');
     if (by7d.length > 0) {
         result += '### Past 7 Days:\n';
         by7d.forEach(a => {
@@ -539,7 +555,9 @@ async function getRawScoresForScoring(pool, userId) {
     const { computeClusterScores } = await import('../scoring/clusterPeerService.js');
     const clusterResult = await computeClusterScores(pool, 'srl', userId);
 
-    if (!clusterResult || !clusterResult.domains) return [];
+    if (!clusterResult) return [];
+    if (clusterResult.coldStart) return [{ coldStart: true }];
+    if (!clusterResult.domains) return [];
 
     // Fetch annotation labels
     const { rows } = await pool.query(

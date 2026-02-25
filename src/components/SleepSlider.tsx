@@ -80,7 +80,11 @@ const mergeIntervals = (intervals: Interval[]): Interval[] => {
 let nextId = 1
 
 // ── Component ────────────────────────────────────────────────
-const SleepSlider = () => {
+interface SleepSliderProps {
+    onSaved?: () => void
+}
+
+const SleepSlider = ({ onSaved }: SleepSliderProps) => {
     const [intervals, setIntervals] = useState<Interval[]>([
         { id: nextId++, start: snap(MIDNIGHT_OFFSET - 90), end: snap(MIDNIGHT_OFFSET + 420) }
         // default: 10:30 PM → 7:00 AM
@@ -261,6 +265,7 @@ const SleepSlider = () => {
             if (res.ok) {
                 setSavedEntry(data.entry)
                 setSubmitMsg({ text: 'Sleep log saved!', type: 'success' })
+                onSaved?.()
             } else {
                 setSubmitMsg({ text: data.error || 'Failed to save', type: 'error' })
             }

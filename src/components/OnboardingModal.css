@@ -1,0 +1,263 @@
+/* Onboarding Modal */
+
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.onboarding-modal {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 40px 40px 28px;
+  max-width: 520px;
+  width: 100%;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: onboarding-in 0.25s ease;
+}
+
+@keyframes onboarding-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Progress dots */
+.onboarding-dots {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #E5E7EB;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.onboarding-dot.active {
+  background: #0891B2;
+  transform: scale(1.3);
+}
+
+.onboarding-dot.done {
+  background: #06B6D4;
+}
+
+/* Icon */
+.onboarding-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  line-height: 1;
+}
+
+/* Title */
+.onboarding-title {
+  margin: 0 0 20px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.3;
+}
+
+/* Body */
+.onboarding-body {
+  width: 100%;
+  text-align: left;
+  font-size: 15px;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.onboarding-body p {
+  margin: 0 0 12px;
+}
+
+.onboarding-body p:last-child {
+  margin-bottom: 0;
+}
+
+.onboarding-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.onboarding-list li {
+  background: #F0F9FF;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #0C4A6E;
+  font-weight: 500;
+}
+
+.onboarding-footer-text {
+  font-size: 13px;
+  color: #6B7280;
+  font-style: italic;
+  margin-top: 12px !important;
+  text-align: center;
+}
+
+/* Checklist */
+.onboarding-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 4px 0;
+}
+
+.onboarding-checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.onboarding-checklist-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.onboarding-checklist-text {
+  flex: 1;
+}
+
+.onboarding-checklist-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #111827;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.onboarding-checklist-freq {
+  font-size: 11px;
+  font-weight: 500;
+  color: #0891B2;
+  background: #E0F2FE;
+  padding: 2px 7px;
+  border-radius: 20px;
+}
+
+.onboarding-checklist-detail {
+  font-size: 13px;
+  color: #6B7280;
+  line-height: 1.4;
+}
+
+/* Navigation buttons */
+.onboarding-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 28px;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.onboarding-btn-primary {
+  padding: 11px 28px;
+  background: #0891B2;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.onboarding-btn-primary:hover:not(:disabled) {
+  background: #06B6D4;
+  transform: translateY(-1px);
+}
+
+.onboarding-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.onboarding-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.onboarding-btn-secondary {
+  padding: 11px 22px;
+  background: transparent;
+  color: #6B7280;
+  border: 1.5px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.onboarding-btn-secondary:hover {
+  border-color: #9CA3AF;
+  color: #374151;
+}
+
+/* Skip link */
+.onboarding-skip {
+  background: none;
+  border: none;
+  color: #9CA3AF;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 12px;
+  padding: 4px;
+}
+
+.onboarding-skip:hover {
+  color: #6B7280;
+  text-decoration: underline;
+}
+
+@media (max-width: 540px) {
+  .onboarding-modal {
+    padding: 28px 20px 20px;
+  }
+
+  .onboarding-title {
+    font-size: 19px;
+  }
+
+  .onboarding-actions {
+    flex-direction: column;
+  }
+
+  .onboarding-btn-primary,
+  .onboarding-btn-secondary {
+    width: 100%;
+    text-align: center;
+  }
+}

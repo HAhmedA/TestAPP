@@ -17,14 +17,16 @@ const API_BASE = '/api'
 interface ConceptScore {
     conceptId: string
     conceptName: string
-    score: number
-    trend: string
+    score: number | null
+    trend: string | null
     avg7d: number | null
     yesterdayScore?: number | null
     clusterLabel?: string | null
     dialMin?: number
     dialCenter?: number
     dialMax?: number
+    computedAt?: string | null
+    coldStart?: boolean
     breakdown?: Record<string, {
         score: number
         weight: number
@@ -62,6 +64,11 @@ const Home = () => {
     const [studentsLoading, setStudentsLoading] = useState(false)
     const [selectedStudentId, setSelectedStudentId] = useState<string>('')
     const selectedStudent = students.find(s => s.id === selectedStudentId) || null
+
+    // Submission reminder state (only for non-admin students)
+    const [missingSleepLog, setMissingSleepLog] = useState(false)
+    const [missingScreenTime, setMissingScreenTime] = useState(false)
+    const [reminderDismissed, setReminderDismissed] = useState(false)
 
     // Load surveys if not already loaded
     useEffect(() => {
@@ -162,6 +169,18 @@ const Home = () => {
         }
     }, [isAdmin, user])
 
+    // Check whether today's sleep log and screen time have been submitted (students only)
+    useEffect(() => {
+        if (isAdmin || !user) return
+        Promise.all([
+            fetch(`${API_BASE}/sleep/today`, { credentials: 'include' }).then(r => r.json()),
+            fetch(`${API_BASE}/screen-time/today`, { credentials: 'include' }).then(r => r.json())
+        ]).then(([sleepData, screenData]) => {
+            setMissingSleepLog(!sleepData.entry)
+            setMissingScreenTime(!screenData.entry)
+        }).catch(() => { /* ignore network errors silently */ })
+    }, [isAdmin, user])
+
     // Add class to parent main element for mood layout
     useEffect(() => {
         const mainElement = document.querySelector('.sjs-app__content')
@@ -218,6 +237,21 @@ const Home = () => {
         metacognitive_regulation: 'How well you adjust your learning strategies as needed. Higher is better.',
         anxiety: 'Your level of test and study anxiety. Lower anxiety is better.',
         effort_regulation: 'Your ability to persist through difficult or boring tasks. Higher is better.'
+    }
+
+    /**
+     * Format computedAt timestamp as a human-readable "last updated" string.
+     * Returns the string and whether it is considered stale (> 24h).
+     */
+    const formatLastUpdated = (computedAt?: string | null): { text: string; stale: boolean } => {
+        if (!computedAt) return { text: '', stale: false }
+        const diff = Date.now() - new Date(computedAt).getTime()
+        const hours = Math.floor(diff / (1000 * 60 * 60))
+        const days = Math.floor(hours / 24)
+        if (hours < 1) return { text: 'Updated just now', stale: false }
+        if (hours < 24) return { text: `Updated ${hours}h ago`, stale: false }
+        if (days === 1) return { text: 'Updated yesterday', stale: true }
+        return { text: `Updated ${days} days ago`, stale: true }
     }
 
     /**
@@ -451,13 +485,21 @@ const Home = () => {
                                             {conceptScores.map(score => (
                                                 <div
                                                     className={`score-gauge-wrapper ${expandedConceptId === score.conceptId ? 'expanded' : ''}`}
-                                                    onClick={() => handleGaugeClick(score.conceptId)}
+                                                    onClick={() => !score.coldStart && handleGaugeClick(score.conceptId)}
                                                     key={score.conceptId}
                                                 >
+                                                    {score.coldStart ? (
+                                                        <div className='cold-start-placeholder'>
+                                                            <div className='cold-start-icon'>⏳</div>
+                                                            <div className='cold-start-label'>{score.conceptName}</div>
+                                                            <div className='cold-start-message'>Building your profile — check back once more students have joined.</div>
+                                                        </div>
+                                                    ) : (
+                                                    <>
                                                     <ScoreGauge
-                                                        score={score.score}
+                                                        score={score.score!}
                                                         label={score.conceptName}
-                                                        trend={score.trend}
+                                                        trend={score.trend ?? undefined}
                                                         size="medium"
                                                         yesterdayScore={score.yesterdayScore}
                                                         clusterLabel={score.clusterLabel}
@@ -465,10 +507,13 @@ const Home = () => {
                                                         dialCenter={score.dialCenter}
                                                         dialMax={score.dialMax}
                                                     />
+                                                    {(() => { const lu = formatLastUpdated(score.computedAt); return lu.text ? <div className={`gauge-last-updated${lu.stale ? ' stale' : ''}`}>{lu.text}</div> : null })()}
+                                                    </>
+                                                    )}
                                                     {expandedConceptId === score.conceptId && score.breakdown && (() => {
-                                                        const badge = getSelfComparisonBadge(score.score, score.yesterdayScore)
+                                                        const badge = getSelfComparisonBadge(score.score!, score.yesterdayScore)
                                                         const dialLabel = getDialPositionLabel(
-                                                            score.score,
+                                                            score.score!,
                                                             score.dialMin ?? 0,
                                                             score.dialCenter ?? 50,
                                                             score.dialMax ?? 100
@@ -575,41 +620,29 @@ const Home = () => {
     return (
         <div className='mood-home-wrapper'>
             <div className='mood-home-container'>
-                {/* Welcome Card */}
-                <div className='welcome-card'>
-                    <div className='welcome-card-content'>
-                        <h2 className='welcome-card-title'>Welcome, {user?.name || 'Student'}!</h2>
-                        <p className='welcome-card-description'>Update your status and answer a new surveys</p>
-                        {firstSurvey && (
-                            <Link to={`/run/${firstSurvey.id}`} className='fill-survey-button'>
-                                Fill Survey
-                            </Link>
-                        )}
-                    </div>
-                    <img
-                        src="/assets/student-illustration.png"
-                        alt="Student with checklist"
-                        className='welcome-card-illustration'
-                    />
-                </div>
-
-                {/* Sleep Slider */}
-                <SleepSlider />
-
-                {/* Screen Time Questionnaire Link */}
-                <Link to="/screen-time" className='mood-card' style={{ display: 'block', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                            <h2 className='mood-card-title' style={{ fontSize: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                📱 Daily Screen Time
-                            </h2>
-                            <p className='mood-card-description' style={{ marginBottom: 0 }}>
-                                Log your screen usage from yesterday — 3 quick questions
-                            </p>
+                {/* Submission reminder banner — top of page */}
+                {!reminderDismissed && (missingSleepLog || missingScreenTime) && (
+                    <div className='reminder-banner'>
+                        <div className='reminder-content'>
+                            <span className='reminder-icon'>⚠</span>
+                            <span className='reminder-text'>You haven't logged today yet:</span>
+                            {missingSleepLog && (
+                                <button
+                                    className='reminder-link'
+                                    onClick={() => document.getElementById('sleep-log-section')?.scrollIntoView({ behavior: 'smooth' })}
+                                >Sleep log →</button>
+                            )}
+                            {missingScreenTime && (
+                                <Link to="/screen-time" className='reminder-link'>Screen time →</Link>
+                            )}
                         </div>
-                        <span style={{ fontSize: '24px', color: '#9CA3AF' }}>→</span>
+                        <button
+                            className='reminder-dismiss'
+                            onClick={() => setReminderDismissed(true)}
+                            aria-label='Dismiss reminder'
+                        >✕</button>
                     </div>
-                </Link>
+                )}
 
                 {/* Score Gauges Section */}
                 <div className='mood-card'>
@@ -637,13 +670,21 @@ const Home = () => {
                                 {conceptScores.map(score => (
                                     <div
                                         className={`score-gauge-wrapper ${expandedConceptId === score.conceptId ? 'expanded' : ''}`}
-                                        onClick={() => handleGaugeClick(score.conceptId)}
+                                        onClick={() => !score.coldStart && handleGaugeClick(score.conceptId)}
                                         key={score.conceptId}
                                     >
+                                        {score.coldStart ? (
+                                            <div className='cold-start-placeholder'>
+                                                <div className='cold-start-icon'>⏳</div>
+                                                <div className='cold-start-label'>{score.conceptName}</div>
+                                                <div className='cold-start-message'>Building your profile — check back once more students have joined.</div>
+                                            </div>
+                                        ) : (
+                                        <>
                                         <ScoreGauge
-                                            score={score.score}
+                                            score={score.score!}
                                             label={score.conceptName}
-                                            trend={score.trend}
+                                            trend={score.trend ?? undefined}
                                             size="medium"
                                             yesterdayScore={score.yesterdayScore}
                                             clusterLabel={score.clusterLabel}
@@ -651,10 +692,13 @@ const Home = () => {
                                             dialCenter={score.dialCenter}
                                             dialMax={score.dialMax}
                                         />
+                                        {(() => { const lu = formatLastUpdated(score.computedAt); return lu.text ? <div className={`gauge-last-updated${lu.stale ? ' stale' : ''}`}>{lu.text}</div> : null })()}
+                                        </>
+                                        )}
                                         {expandedConceptId === score.conceptId && score.breakdown && (() => {
-                                            const badge = getSelfComparisonBadge(score.score, score.yesterdayScore)
+                                            const badge = getSelfComparisonBadge(score.score!, score.yesterdayScore)
                                             const dialLabel = getDialPositionLabel(
-                                                score.score,
+                                                score.score!,
                                                 score.dialMin ?? 0,
                                                 score.dialCenter ?? 50,
                                                 score.dialMax ?? 100
@@ -708,6 +752,33 @@ const Home = () => {
                             </div>
                         )}
                     </div>
+                </div>
+
+                {/* Quick Action Cards */}
+                <div className='quick-actions-row'>
+                    {firstSurvey && (
+                        <Link to={`/run/${firstSurvey.id}`} className='quick-action-card'>
+                            <span className='quick-action-icon'>📝</span>
+                            <div className='quick-action-text'>
+                                <div className='quick-action-title'>Self-Regulated Learning Survey</div>
+                                <div className='quick-action-desc'>Reflect on your study strategies</div>
+                            </div>
+                            <span className='quick-action-arrow'>→</span>
+                        </Link>
+                    )}
+                    <Link to="/screen-time" className='quick-action-card'>
+                        <span className='quick-action-icon'>📱</span>
+                        <div className='quick-action-text'>
+                            <div className='quick-action-title'>Daily Screen Time</div>
+                            <div className='quick-action-desc'>Log your screen usage from yesterday</div>
+                        </div>
+                        <span className='quick-action-arrow'>→</span>
+                    </Link>
+                </div>
+
+                {/* Sleep Log */}
+                <div id='sleep-log-section'>
+                    <SleepSlider onSaved={() => setMissingSleepLog(false)} />
                 </div>
 
                 <div className='mood-cards-container'>

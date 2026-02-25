@@ -70,6 +70,46 @@ router.get('/', async (req, res) => {
             screen_time: 'Screen Time'
         }
 
+        // Detect cold start: check real-user pool size per concept.
+        // If the user has submitted data but the pool is below MIN_CLUSTER_USERS,
+        // include a coldStart entry so the frontend shows the placeholder.
+        const MIN_CLUSTER_USERS = 10
+        const excludeSimulated = process.env.SIMULATION_MODE === 'false'
+            ? `AND user_id NOT IN (SELECT user_id FROM public.student_profiles WHERE simulated_profile IS NOT NULL)`
+            : ''
+
+        const { rows: poolSizeRows } = await pool.query(`
+            SELECT 'sleep' as concept, COUNT(DISTINCT user_id) as user_count
+            FROM public.sleep_sessions WHERE session_date >= CURRENT_DATE - INTERVAL '7 days' ${excludeSimulated}
+            UNION ALL
+            SELECT 'screen_time', COUNT(DISTINCT user_id)
+            FROM public.screen_time_sessions WHERE session_date >= CURRENT_DATE - INTERVAL '7 days' ${excludeSimulated}
+            UNION ALL
+            SELECT 'lms', COUNT(DISTINCT user_id)
+            FROM public.lms_sessions WHERE session_date >= CURRENT_DATE - INTERVAL '7 days' ${excludeSimulated}
+            UNION ALL
+            SELECT 'srl', COUNT(DISTINCT user_id)
+            FROM public.srl_annotations WHERE time_window = '7d' AND response_count > 0 ${excludeSimulated}
+        `)
+        const poolSizes = {}
+        for (const r of poolSizeRows) {
+            poolSizes[r.concept] = parseInt(r.user_count)
+        }
+
+        // Check which concepts the user has personally submitted data for
+        const { rows: userDataRows } = await pool.query(`
+            SELECT 'sleep' as concept FROM public.sleep_sessions WHERE user_id = $1 LIMIT 1
+            UNION
+            SELECT 'screen_time' FROM public.screen_time_sessions WHERE user_id = $1 LIMIT 1
+            UNION
+            SELECT 'lms' FROM public.lms_sessions WHERE user_id = $1 LIMIT 1
+            UNION
+            SELECT 'srl' FROM public.srl_annotations WHERE user_id = $1 AND response_count > 0 LIMIT 1
+        `, [userId])
+        const userHasData = new Set(userDataRows.map(r => r.concept))
+
+        const scoredConceptIds = new Set(rows.map(r => r.concept_id))
+
         const scores = rows.map(row => ({
             conceptId: row.concept_id,
             conceptName: conceptNames[row.concept_id] || row.concept_id,
@@ -82,8 +122,34 @@ router.get('/', async (req, res) => {
             dialMin: clusterInfo[row.concept_id]?.dialMin || 0,
             dialCenter: clusterInfo[row.concept_id]?.dialCenter || 50,
             dialMax: clusterInfo[row.concept_id]?.dialMax || 100,
-            computedAt: row.computed_at
+            computedAt: row.computed_at,
+            coldStart: false
         }))
+
+        // Add cold-start placeholder entries for concepts where the student has data
+        // but the cohort is too small for clustering.
+        for (const conceptId of Object.keys(conceptNames)) {
+            if (!scoredConceptIds.has(conceptId) && userHasData.has(conceptId)) {
+                const poolSize = poolSizes[conceptId] || 0
+                if (poolSize < MIN_CLUSTER_USERS) {
+                    scores.push({
+                        conceptId,
+                        conceptName: conceptNames[conceptId],
+                        score: null,
+                        trend: null,
+                        avg7d: null,
+                        breakdown: null,
+                        yesterdayScore: null,
+                        clusterLabel: null,
+                        dialMin: 0,
+                        dialCenter: 50,
+                        dialMax: 100,
+                        computedAt: null,
+                        coldStart: true
+                    })
+                }
+            }
+        }
 
         res.json({ scores })
     } catch (e) {

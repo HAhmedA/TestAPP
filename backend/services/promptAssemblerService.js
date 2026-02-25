@@ -10,6 +10,10 @@ import logger from '../utils/logger.js'
 import { getSummariesForChatbot, hasHistory } from './summarizationService.js'
 import { getScoresForChatbot } from './scoring/index.js'
 import { estimateTokens } from './apiConnectorService.js'
+import { getAnnotationsForChatbot } from './annotators/srlAnnotationService.js'
+import { getJudgmentsForChatbot as getSleepAnnotations } from './annotators/sleepAnnotationService.js'
+import { getJudgmentsForChatbot as getScreenTimeAnnotations } from './annotators/screenTimeAnnotationService.js'
+import { getJudgmentsForChatbot as getLMSAnnotations } from './annotators/lmsAnnotationService.js'
 
 // Get directory path for ES modules
 const __filename = fileURLToPath(import.meta.url)
@@ -33,26 +37,36 @@ const MAX_SESSION_MESSAGES = 50 // Increased for high-context models, but subjec
  * @param {string} filePath - Path to the prompt file
  */
 async function seedPromptIfMissing(promptType, filePath) {
-    // Check if this type of prompt exists
+    let filePrompt
+    try {
+        filePrompt = fs.readFileSync(filePath, 'utf-8')
+    } catch (err) {
+        logger.warn(`Could not read ${promptType} prompt file: ${err.message}`)
+        return
+    }
+
+    // Check if a prompt already exists in DB
     const { rows } = await pool.query(
-        `SELECT id FROM public.system_prompts WHERE prompt_type = $1 LIMIT 1`,
+        `SELECT id, prompt FROM public.system_prompts WHERE prompt_type = $1 LIMIT 1`,
         [promptType]
     )
 
     if (rows.length === 0) {
-        // Prompt doesn't exist - seed from file
-        try {
-            const filePrompt = fs.readFileSync(filePath, 'utf-8')
-            await pool.query(
-                `INSERT INTO public.system_prompts (prompt, prompt_type, updated_at) VALUES ($1, $2, NOW())`,
-                [filePrompt, promptType]
-            )
-            logger.info(`${promptType} prompt seeded from file to database`)
-        } catch (err) {
-            logger.warn(`Could not seed ${promptType} prompt from file: ${err.message}`)
-        }
+        // No prompt in DB — insert from file
+        await pool.query(
+            `INSERT INTO public.system_prompts (prompt, prompt_type, updated_at) VALUES ($1, $2, NOW())`,
+            [filePrompt, promptType]
+        )
+        logger.info(`${promptType} prompt seeded from file to database`)
+    } else if (rows[0].prompt.trim() !== filePrompt.trim()) {
+        // File content differs from DB — file is the source of truth, update DB
+        await pool.query(
+            `UPDATE public.system_prompts SET prompt = $1, updated_at = NOW() WHERE id = $2`,
+            [filePrompt, rows[0].id]
+        )
+        logger.info(`${promptType} prompt updated from file (content changed)`)
     } else {
-        logger.info(`${promptType} prompt already exists in database`)
+        logger.info(`${promptType} prompt is up to date`)
     }
 }
 
@@ -173,11 +187,16 @@ async function assemblePrompt(userId, sessionId, userMessage = null) {
     logger.prompt(`Assembling prompt for user ${userId}, session ${sessionId}`)
 
     // Gather all data sources in parallel
-    const [systemPrompt, userContext, conceptScores, summaries] = await Promise.all([
+    const [systemPrompt, userContext, conceptScores, summaries,
+           srlAnnotations, sleepAnnotations, screenTimeAnnotations, lmsAnnotations] = await Promise.all([
         getSystemPrompt(),
         getUserContext(userId),
         getScoresForChatbot(userId),
-        getSummariesForChatbot(userId)
+        getSummariesForChatbot(userId),
+        getAnnotationsForChatbot(pool, userId),
+        getSleepAnnotations(pool, userId),
+        getScreenTimeAnnotations(pool, userId),
+        getLMSAnnotations(pool, userId)
     ])
 
     // Log what data we have
@@ -206,12 +225,16 @@ async function assemblePrompt(userId, sessionId, userMessage = null) {
     let currentTokens = estimateTokens(baseSystemPrompt)
     let assembledContext = baseSystemPrompt
 
-    // 2. Context Sections (Prioritized: User Context > Data Summary > Summaries)
+    // 2. Context Sections (Prioritized: User Context > Annotations > Summary > Summaries)
     const contextSections = [
         { name: 'USER CONTEXT & PREFERENCES', content: userContext, priority: 1 },
-        { name: 'STUDENT DATA SUMMARY', content: conceptScores, priority: 2 },
-        { name: 'PREVIOUS CHATS (SUMMARIZED)', content: summaries, priority: 3 },
-        { name: 'CURRENT SESSION', content: userType, priority: 1 } // High priority for session type
+        { name: 'CURRENT SESSION', content: userType, priority: 1 },
+        { name: 'ANNOTATED QUESTIONNAIRE INSIGHTS (SRL Data)', content: srlAnnotations, priority: 2 },
+        { name: 'SLEEP ANALYSIS', content: sleepAnnotations, priority: 2 },
+        { name: 'SCREEN TIME ANALYSIS', content: screenTimeAnnotations, priority: 2 },
+        { name: 'LMS ACTIVITY ANALYSIS', content: lmsAnnotations, priority: 2 },
+        { name: 'STUDENT DATA SUMMARY (scores)', content: conceptScores, priority: 3 },
+        { name: 'PREVIOUS CHATS (SUMMARIZED)', content: summaries, priority: 4 }
     ]
 
     // Sort by priority (1 is highest)
@@ -302,11 +325,16 @@ async function assemblePrompt(userId, sessionId, userMessage = null) {
 async function assembleInitialGreetingPrompt(userId) {
     logger.prompt(`Assembling initial greeting prompt`, { userId })
 
-    const [systemPrompt, userContext, conceptScores, summaries] = await Promise.all([
+    const [systemPrompt, userContext, conceptScores, summaries,
+           srlAnnotations, sleepAnnotations, screenTimeAnnotations, lmsAnnotations] = await Promise.all([
         getSystemPrompt(),
         getUserContext(userId),
         getScoresForChatbot(userId),
-        getSummariesForChatbot(userId)
+        getSummariesForChatbot(userId),
+        getAnnotationsForChatbot(pool, userId),
+        getSleepAnnotations(pool, userId),
+        getScreenTimeAnnotations(pool, userId),
+        getLMSAnnotations(pool, userId)
     ])
 
     const userHasHistory = await hasHistory(userId)
@@ -331,7 +359,19 @@ async function assembleInitialGreetingPrompt(userId) {
 USER CONTEXT & PREFERENCES:
 ${userContext}
 
-STUDENT DATA SUMMARY:
+ANNOTATED QUESTIONNAIRE INSIGHTS (SRL Data):
+${srlAnnotations}
+
+SLEEP ANALYSIS:
+${sleepAnnotations}
+
+SCREEN TIME ANALYSIS:
+${screenTimeAnnotations}
+
+LMS ACTIVITY ANALYSIS:
+${lmsAnnotations}
+
+STUDENT DATA SUMMARY (scores):
 ${conceptScores}
 
 PREVIOUS CHATS (SUMMARIZED):

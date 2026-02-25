@@ -21,6 +21,9 @@
 .mood-home-container {
   max-width: 1200px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 /* Welcome Card with illustration */
@@ -238,6 +241,114 @@
   font-size: 16px;
 }
 
+/* Submission reminder banner */
+.reminder-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+  padding: 12px 16px;
+  gap: 12px;
+}
+
+.reminder-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.reminder-icon {
+  font-size: 16px;
+  color: #d97706;
+}
+
+.reminder-text {
+  font-size: 14px;
+  color: #92400e;
+  font-weight: 500;
+}
+
+.reminder-link {
+  font-size: 13px;
+  color: #1d4ed8;
+  text-decoration: none;
+  background: #dbeafe;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: inherit;
+}
+
+.reminder-link:hover {
+  background: #bfdbfe;
+}
+
+.reminder-dismiss {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #9ca3af;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.reminder-dismiss:hover {
+  color: #374151;
+  background: #f3f4f6;
+}
+
+/* Last-updated label under each gauge */
+.gauge-last-updated {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.gauge-last-updated.stale {
+  color: #d97706; /* amber — score is more than 24h old */
+}
+
+/* Cold start placeholder — shown when cohort is too small for clustering */
+.cold-start-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 12px;
+  text-align: center;
+  min-height: 160px;
+}
+
+.cold-start-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.cold-start-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.cold-start-message {
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.4;
+}
+
 .mood-loading {
   text-align: center;
   color: #6B7280;
@@ -368,4 +479,66 @@
   font-size: 15px;
   color: #0C4A6E;
   font-weight: 500;
+}
+
+/* ── Quick Action Cards ──────────────────────────────────── */
+
+.quick-actions-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 0; /* gap handled by mood-cards-container */
+}
+
+.quick-action-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: white;
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.2s, transform 0.15s;
+  cursor: pointer;
+}
+
+.quick-action-card:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.13);
+  transform: translateY(-2px);
+}
+
+.quick-action-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.quick-action-text {
+  flex: 1;
+}
+
+.quick-action-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 3px;
+}
+
+.quick-action-desc {
+  font-size: 13px;
+  color: #6B7280;
+}
+
+.quick-action-arrow {
+  font-size: 20px;
+  color: #9CA3AF;
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .quick-actions-row {
+    grid-template-columns: 1fr;
+  }
 }

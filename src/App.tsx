@@ -4,6 +4,7 @@ import { BrowserRouter as Router, useLocation } from "react-router-dom";
 import Content, { NavBar } from './routes'
 import store, { useReduxSelector } from './redux';
 import Chatbot from './components/Chatbot';
+import OnboardingModal from './components/OnboardingModal';
 import './App.css';
 
 // Component to conditionally show header
@@ -28,6 +29,8 @@ const AppContent = () => {
       </main>
       {/* Chatbot only for logged-in students */}
       {isStudent && <Chatbot isLoggedIn={isStudent} />}
+      {/* First-login onboarding modal — shown until student marks complete */}
+      {isStudent && <OnboardingModal />}
     </div>
   );
 };
