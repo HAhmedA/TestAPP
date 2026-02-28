@@ -44,7 +44,7 @@ Simulator ──► DB Session Tables ──► peerStatsService (getAllUserMetr
 |---|---|---|---|---|
 | `volume` | `total_active_minutes` | `SUM(total_active_minutes)` | ❌ | More time on LMS = better |
 | `consistency` | `days_active` | `COUNT(DISTINCT session_date)` | ❌ | More active days = better |
-| `action_mix` | `active_percent` | `(total - passive) / total * 100` | ❌ | Higher active % = better |
+| `participation_variety` | `participation_score` | `LEAST(quiz,3)/3×34 + LEAST(assign,2)/2×33 + LEAST(forum,2)/2×33` | ❌ | Broader tool usage = better |
 | `session_quality` | `avg_session_duration` | `SUM(active) / SUM(sessions)` | ❌ | Longer sessions = better |
 
 > **Note:** LMS uses SUM intentionally — total weekly activity is the correct comparison metric for engagement. Students with fewer active days genuinely have less engagement.

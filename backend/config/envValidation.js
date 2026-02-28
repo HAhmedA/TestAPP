@@ -47,11 +47,11 @@ function validateEnvironment(isProduction = false) {
 
     // Check for weak secrets in production
     if (isProduction) {
-        if (process.env.SESSION_SECRET === 'dev-secret') {
-            missing.push('SESSION_SECRET: Cannot use "dev-secret" in production')
+        if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'dev-secret') {
+            missing.push('SESSION_SECRET: Must be a cryptographically random string in production')
         }
-        if (process.env.PGPASSWORD === 'password') {
-            warnings.push('PGPASSWORD: Using weak password "password" in production is not recommended')
+        if (!process.env.PGPASSWORD || process.env.PGPASSWORD === 'password') {
+            missing.push('PGPASSWORD: Must be set to a strong password in production')
         }
     }
 

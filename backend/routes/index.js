@@ -12,7 +12,7 @@ import sleepRoutes from './sleep.js'
 import screenTimeRoutes from './screen-time.js'
 import lmsRoutes from './lms.js'
 
-import { login, logout, getMe } from '../controllers/authController.js'
+import { logout, getMe } from '../controllers/authController.js'
 
 const router = Router()
 
@@ -20,7 +20,6 @@ const router = Router()
 router.use('/auth', authRoutes)
 
 // Legacy Auth Aliases (Backward Compatibility)
-router.post('/login', login)
 router.post('/logout', logout)
 router.get('/me', getMe)
 

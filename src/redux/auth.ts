@@ -27,7 +27,7 @@ const initialState: AuthState = {
 
 // Legacy role-based login (for backwards compatibility)
 export const login = createAsyncThunk('auth/login', async (role: UserRole) => {
-    const response = await axios.post(apiBaseAddress + '/login', { role })
+    const response = await axios.post(apiBaseAddress + '/auth/legacy-login', { role })
     return response.data as AuthUser
 })
 

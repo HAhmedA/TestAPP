@@ -94,3 +94,32 @@ describe('GET /api/auth/me', () => {
         expect(res.body).toBeNull()
     })
 })
+
+// ── Security regression: SEC-01 / CRIT-T1 ─────────────────────────────────────
+// legacy-login must not grant admin access in production.
+// If this test fails, the production guard has been removed — do not merge.
+describe('POST /api/auth/legacy-login — production security (CRIT-T1)', () => {
+    const originalEnv = process.env.NODE_ENV
+
+    afterAll(() => {
+        process.env.NODE_ENV = originalEnv
+    })
+
+    test('returns 404 in production when role=admin is supplied without credentials', async () => {
+        process.env.NODE_ENV = 'production'
+        const res = await request(buildApp())
+            .post('/api/auth/legacy-login')
+            .send({ role: 'admin' })
+        expect(res.status).toBe(404)
+        process.env.NODE_ENV = originalEnv
+    })
+
+    test('returns 404 in production when role=student is supplied without credentials', async () => {
+        process.env.NODE_ENV = 'production'
+        const res = await request(buildApp())
+            .post('/api/auth/legacy-login')
+            .send({ role: 'student' })
+        expect(res.status).toBe(404)
+        process.env.NODE_ENV = originalEnv
+    })
+})

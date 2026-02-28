@@ -186,3 +186,66 @@ All route handlers must be wrapped with `asyncRoute()` so thrown errors reach th
 - **Frontend component tests**: React Testing Library
   - Run with `npm test` from the root
 - **Before merging**: all existing tests must pass; new services should include at least one smoke test covering the happy path.
+
+---
+
+## 8. Moodle LMS Integration
+
+The platform can ingest real Moodle data via the Moodle REST API in addition to simulation.
+
+### Key Files
+
+| File | Role |
+|---|---|
+| `backend/services/moodleService.js` | REST API adapter — all HTTP calls to Moodle live here |
+| `backend/services/moodleEventSimulator.js` | Generates synthetic Moodle-shaped data for test accounts; uses the same `aggregateToDaily()` pipeline as the real service |
+| `backend/routes/lms.js` | Admin sync routes (`GET/POST /api/lms/admin/*`, protected by `requireAdmin`) |
+| `backend/scripts/moodleSetup.js` | One-off setup: creates Moodle test users + course via REST |
+| `backend/scripts/moodleActivitySetup.js` | One-off setup: submits quiz, assignment, forum activity for test users |
+
+### Data Flow
+
+```
+Moodle REST API
+  ↓  moodleService.js
+  ↓  fetchQuizAttempts() + fetchAssignmentSubmissions() + fetchForumPosts()
+  ↓  aggregateToDaily() → per-day totals
+  ↓  INSERT/UPSERT → lms_sessions
+  ↓  scoreQueryService.getLMSMetrics() → getLMSMetrics()
+  ↓  clusterPeerService.computeClusterScores('lms')
+  ↓  concept_scores + user_cluster_assignments
+```
+
+Simulation uses the same path from `aggregateToDaily()` downwards — ensuring simulated and real data are scored identically.
+
+### LMS Scoring Dimensions
+
+The LMS concept uses these four dimensions for PGMoE clustering:
+
+| Dimension | Metric | Formula / Column |
+|---|---|---|
+| `volume` | `total_active_minutes` | `SUM(total_active_minutes)` |
+| `consistency` | `days_active` | `COUNT(DISTINCT session_date)` |
+| `participation_variety` | `participation_score` | `LEAST(quiz,3)/3×34 + LEAST(assign,2)/2×33 + LEAST(forum,2)/2×33` |
+| `session_quality` | `avg_session_duration` | `SUM(active) / SUM(sessions)` |
+
+> **Note:** `participation_variety` replaced the old `action_mix` / `active_percent` dimension (which was always 100% via REST APIs and provided zero variance for clustering). Any `aspect_breakdown` rows predating this change contain `action_mix` keys; new rows use `participation_variety`.
+
+### Moodle API Limitations
+
+- `reading_minutes` and `watching_minutes` are always `0` — the Moodle module REST APIs (`mod_quiz`, `mod_assign`, `mod_forum`) do not expose reading/video events. Only the event log does, and it is not accessible to external tokens.
+- Assignment submissions: the sync filters out **draft** submissions (`status !== 'submitted'`). Call `mod_assign_submit_for_grading` after `mod_assign_save_submission` to transition drafts to submitted.
+- Forum post fetching is **sequential per thread** (one HTTP call per discussion). Syncing many students with large forums will be slow — this is a known architectural limitation (see P-C3 in the code review report).
+
+### Environment Variables
+
+```bash
+MOODLE_BASE_URL=http://your-moodle-host/moodle  # e.g. http://localhost:8888/moodle501
+MOODLE_TOKEN=your-webservice-token
+```
+
+Both are optional at startup. If absent, the app starts normally but all `/api/lms` routes return `503 Moodle not configured`. The scoring pipeline runs on simulation data only.
+
+### Cold Start Behaviour
+
+`MIN_CLUSTER_USERS = 10` (defined in `clusterPeerService.js`). Until 10 users have LMS data, `computeClusterScores('lms')` returns `{ coldStart: true }`. The frontend renders a "not enough data" placeholder for the LMS gauge.

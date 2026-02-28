@@ -58,7 +58,7 @@ Each concept has a **simulator** that generates realistic data for test accounts
 |---|---|---|---|
 | Sleep | `sleepDataSimulator.js` | `sleep_sessions` | total_sleep_minutes, awakenings_count, bedtime |
 | Screen Time | `screenTimeDataSimulator.js` | `screen_time_sessions` | total_screen_minutes, longest_session, late_night_minutes |
-| LMS | `lmsDataSimulator.js` | `lms_sessions` | total_active_minutes, days_active, active_percent, avg_session_duration |
+| LMS | `moodleEventSimulator.js` | `lms_sessions` | total_active_minutes, days_active, participation_score, avg_session_duration |
 | SRL | `srlDataSimulator.js` | `srl_responses` | 14 Likert-scale concept scores (1–5) |
 
 **Orchestrator:** `simulationOrchestratorService.js` coordinates all simulators, assigns profiles via round-robin, and triggers score computation after data generation.
@@ -77,7 +77,7 @@ Each concept has an **annotation service** that:
 |---|---|---|
 | Sleep | `sleepAnnotationService.js` | duration, continuity, timing |
 | Screen Time | `screenTimeAnnotationService.js` | volume, distribution, pre_sleep |
-| LMS | `lmsAnnotationService.js` | volume, consistency, action_mix, session_quality |
+| LMS | `lmsAnnotationService.js` | volume, consistency, participation_variety, session_quality |
 | SRL | `srlAnnotationService.js` | 14 concept keys (efficiency, importance, tracking, clarity, effort, focus, help_seeking, community, timeliness, motivation, anxiety, enjoyment, learning_from_feedback, self_assessment) |
 
 Each annotation service's `getRawScoresForScoring()` function calls:
@@ -170,7 +170,7 @@ const DIMENSION_DEFS = {
     lms: {
         volume:          { metric: 'total_active_minutes', inverted: false },
         consistency:     { metric: 'days_active',          inverted: false },
-        action_mix:      { metric: 'active_percent',       inverted: false },
+        participation_variety: { metric: 'participation_score', inverted: false },
         session_quality: { metric: 'avg_session_duration', inverted: false }
     },
     sleep: {

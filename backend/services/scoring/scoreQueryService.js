@@ -25,20 +25,20 @@ export async function getConceptPoolSizes(days = 7) {
     const { rows } = await pool.query(`
         SELECT 'sleep' as concept, COUNT(DISTINCT user_id) as user_count
         FROM public.sleep_sessions
-        WHERE session_date >= CURRENT_DATE - INTERVAL '${days} days' ${EXCLUDE_SIMULATED_USERS}
+        WHERE session_date >= CURRENT_DATE - ($1 * INTERVAL '1 day') ${EXCLUDE_SIMULATED_USERS}
         UNION ALL
         SELECT 'screen_time', COUNT(DISTINCT user_id)
         FROM public.screen_time_sessions
-        WHERE session_date >= CURRENT_DATE - INTERVAL '${days} days' ${EXCLUDE_SIMULATED_USERS}
+        WHERE session_date >= CURRENT_DATE - ($1 * INTERVAL '1 day') ${EXCLUDE_SIMULATED_USERS}
         UNION ALL
         SELECT 'lms', COUNT(DISTINCT user_id)
         FROM public.lms_sessions
-        WHERE session_date >= CURRENT_DATE - INTERVAL '${days} days' ${EXCLUDE_SIMULATED_USERS}
+        WHERE session_date >= CURRENT_DATE - ($1 * INTERVAL '1 day') ${EXCLUDE_SIMULATED_USERS}
         UNION ALL
         SELECT 'srl', COUNT(DISTINCT user_id)
         FROM public.srl_annotations
         WHERE time_window = '7d' AND response_count > 0 ${EXCLUDE_SIMULATED_USERS}
-    `)
+    `, [days])
     const sizes = {}
     for (const r of rows) {
         sizes[r.concept] = parseInt(r.user_count)
@@ -113,10 +113,10 @@ async function getLMSMetrics(days) {
                + LEAST(SUM(forum_posts), 2) / 2.0 * 33.0
                AS participation_score
         FROM public.lms_sessions
-        WHERE session_date >= CURRENT_DATE - INTERVAL '${days} days'
+        WHERE session_date >= CURRENT_DATE - ($1 * INTERVAL '1 day')
         ${EXCLUDE_SIMULATED_USERS}
         GROUP BY user_id
-    `)
+    `, [days])
     const metrics = {}
     for (const r of rows) {
         metrics[r.user_id] = {
@@ -139,10 +139,10 @@ async function getSleepMetrics(days) {
                AVG(awake_minutes) as avg_awake_minutes,
                STDDEV_POP(EXTRACT(HOUR FROM bedtime) + EXTRACT(MINUTE FROM bedtime) / 60.0) as bedtime_stddev
         FROM public.sleep_sessions
-        WHERE session_date >= CURRENT_DATE - INTERVAL '${days} days'
+        WHERE session_date >= CURRENT_DATE - ($1 * INTERVAL '1 day')
         ${EXCLUDE_SIMULATED_USERS}
         GROUP BY user_id
-    `)
+    `, [days])
     const metrics = {}
     for (const r of rows) {
         metrics[r.user_id] = {
@@ -163,10 +163,10 @@ async function getScreenTimeMetrics(days) {
                AVG(longest_continuous_session) as avg_longest_session,
                AVG(late_night_screen_minutes) as avg_late_night
         FROM public.screen_time_sessions
-        WHERE session_date >= CURRENT_DATE - INTERVAL '${days} days'
+        WHERE session_date >= CURRENT_DATE - ($1 * INTERVAL '1 day')
         ${EXCLUDE_SIMULATED_USERS}
         GROUP BY user_id
-    `)
+    `, [days])
     const metrics = {}
     for (const r of rows) {
         metrics[r.user_id] = {

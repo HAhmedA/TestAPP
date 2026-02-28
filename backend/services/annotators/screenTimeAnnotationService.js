@@ -252,8 +252,8 @@ async function recomputeBaseline(pool, userId, days = 7) {
            AVG(late_night_screen_minutes) as avg_late_night,
            COUNT(*) as sessions_count
          FROM public.screen_time_sessions
-         WHERE user_id = $1 AND session_date >= CURRENT_DATE - INTERVAL '${days} days'`,
-        [userId]
+         WHERE user_id = $1 AND session_date >= CURRENT_DATE - ($2 * INTERVAL '1 day')`,
+        [userId, days]
     );
 
     if (rows.length === 0 || rows[0].sessions_count === 0) {

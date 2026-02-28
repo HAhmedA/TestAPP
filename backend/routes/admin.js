@@ -235,7 +235,7 @@ router.get('/cluster-members', asyncRoute(async (req, res) => {
         clusterP50: r.cluster_p50 != null ? parseFloat(r.cluster_p50) : null,
         userId: r.user_id,
         name: r.name,
-        email: r.email,
+        email: r.email.split('@')[0],
         score: r.score != null ? parseFloat(r.score) : null,
         trend: r.trend,
         percentilePosition: r.percentile_position != null ? parseFloat(r.percentile_position) : null,

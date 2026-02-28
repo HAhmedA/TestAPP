@@ -310,8 +310,8 @@ async function recomputeBaseline(pool, userId, days = 7) {
            AVG(EXTRACT(HOUR FROM wake_time) + EXTRACT(MINUTE FROM wake_time)/60.0) as avg_wake,
            COUNT(*) as sessions_count
          FROM public.sleep_sessions
-         WHERE user_id = $1 AND session_date >= CURRENT_DATE - INTERVAL '${days} days'`,
-        [userId]
+         WHERE user_id = $1 AND session_date >= CURRENT_DATE - ($2 * INTERVAL '1 day')`,
+        [userId, days]
     );
 
     if (rows.length === 0 || rows[0].sessions_count === 0) {

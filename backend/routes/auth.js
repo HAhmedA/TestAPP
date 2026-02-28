@@ -70,6 +70,9 @@ router.get('/me', getMe)
 
 // Legacy endpoints (backwards compatible)
 router.post('/legacy-login', async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(404).json({ error: 'not_found' })
+    }
     // If email/password present, use real login
     if (req.body?.email && req.body?.password) {
         return login(req, res)

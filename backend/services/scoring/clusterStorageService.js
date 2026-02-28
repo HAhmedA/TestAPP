@@ -60,19 +60,25 @@ async function storeClusterResults(conceptId, composites, clusterRemap, clusterM
 }
 
 async function storeUserAssignment(userId, conceptId, clusterIndex, clusterLabel, percentilePosition, externalClient = null) {
-    const db = externalClient || pool;
-    try {
-        await db.query(
-            `INSERT INTO public.user_cluster_assignments
+    const sql = `INSERT INTO public.user_cluster_assignments
              (user_id, concept_id, cluster_index, cluster_label, percentile_position, assigned_at)
              VALUES ($1, $2, $3, $4, $5, NOW())
              ON CONFLICT (user_id, concept_id) DO UPDATE SET
                cluster_index = EXCLUDED.cluster_index,
                cluster_label = EXCLUDED.cluster_label,
                percentile_position = EXCLUDED.percentile_position,
-               assigned_at = NOW()`,
-            [userId, conceptId, clusterIndex, clusterLabel, percentilePosition]
-        );
+               assigned_at = NOW()`;
+    const params = [userId, conceptId, clusterIndex, clusterLabel, percentilePosition];
+
+    if (externalClient) {
+        // Inside a transaction — let errors propagate so withTransaction can rollback
+        await externalClient.query(sql, params);
+        return;
+    }
+
+    // Standalone path (fire-and-forget) — log but don't crash the caller
+    try {
+        await pool.query(sql, params);
     } catch (err) {
         logger.error(`Error storing user cluster assignment: ${err.message}`);
     }
