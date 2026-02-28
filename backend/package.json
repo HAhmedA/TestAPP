@@ -5,9 +5,8 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node-pg-migrate up -m migrations --envPath ../.env && node server.js",
+    "start": "node server.js",
     "migrate": "node-pg-migrate up -m migrations --envPath ../.env",
-    "migrate:down": "node-pg-migrate down -m migrations --envPath ../.env",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {

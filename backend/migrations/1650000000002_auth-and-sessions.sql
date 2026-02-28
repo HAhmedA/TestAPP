@@ -14,11 +14,22 @@ CREATE TABLE IF NOT EXISTS public.users (
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users (email);
 
 -- Link questionnaire results to users (each user can have many questionnaire results)
+
+-- Add columns (idempotent)
 ALTER TABLE public.questionnaire_results
   ADD COLUMN IF NOT EXISTS user_id uuid NULL,
-  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
-  ADD CONSTRAINT fk_questionnaire_results_user FOREIGN KEY (user_id)
-    REFERENCES public.users(id) ON DELETE SET NULL;
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+
+-- Add foreign key constraint (idempotent via exception handler)
+DO $$
+BEGIN
+  ALTER TABLE public.questionnaire_results
+    ADD CONSTRAINT fk_questionnaire_results_user FOREIGN KEY (user_id)
+      REFERENCES public.users(id) ON DELETE SET NULL;
+EXCEPTION
+  WHEN duplicate_object THEN
+    NULL; -- constraint already exists, skip
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_questionnaire_results_user ON public.questionnaire_results (user_id);
 

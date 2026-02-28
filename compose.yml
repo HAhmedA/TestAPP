@@ -24,7 +24,7 @@ services:
       - PGUSER=postgres
       - PGPASSWORD=${PGPASSWORD}
       - PGDATABASE=postgres
-      - DATABASE_URL=postgres://${PGUSER:-postgres}:${PGPASSWORD}@postgres:5432/${PGDATABASE:-postgres}
+      - DATABASE_URL=postgres://${PGUSER:-postgres}:${PGPASSWORD:-}@postgres:5432/${PGDATABASE:-postgres}
       - DEBUG_LLM=true
       - MOODLE_BASE_URL=http://host.docker.internal:8888/moodle501
       - MOODLE_TOKEN=${MOODLE_TOKEN:-}
