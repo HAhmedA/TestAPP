@@ -39,11 +39,6 @@ app.use(helmet({
     }
 }))
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date() })
-})
-
 // Let Express trust reverse proxy headers; important for cookies behind Docker
 app.set('trust proxy', isProduction ? 1 : false)
 const PORT = process.env.PORT || 8080

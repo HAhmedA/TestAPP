@@ -37,13 +37,17 @@ services:
 
   postgres:
     # Postgres 18 with init SQL; mounts at /var/lib/postgresql per 18+ images
-    image: postgres:18
+    image: postgres:18.0
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${PGPASSWORD}
       - POSTGRES_DB=postgres
     ports:
       - "5433:5432" # forward host 5433 to container 5432
+    # WARNING: upgrading postgres major version requires manual data migration.
+    # Existing pgdata volumes from Postgres 17 are incompatible with Postgres 18
+    # (data directory layout changed). Wipe the volume before upgrading:
+    #   docker compose down -v && docker compose up -d
     volumes:
       - ./postgres/initdb:/docker-entrypoint-initdb.d # mount init SQL scripts
       - pgdata:/var/lib/postgresql
