@@ -13,10 +13,11 @@ const mockGetSRLRawScores        = jest.fn()
 const mockComputeAndStoreRawScore = jest.fn()
 const mockLogInfo  = jest.fn()
 const mockLogError = jest.fn()
+const mockPool = { query: jest.fn() }
 
 // ── ESM module mocks ────────────────────────────────────────────────────────────
 jest.unstable_mockModule('../../config/database.js', () => ({
-    default: { query: jest.fn() }
+    default: mockPool
 }))
 jest.unstable_mockModule('../../utils/logger.js', () => ({
     default: { info: mockLogInfo, error: mockLogError, debug: jest.fn(), warn: jest.fn() }
@@ -34,8 +35,8 @@ jest.unstable_mockModule('../../services/annotators/srlAnnotationService.js', ()
     getRawScoresForScoring: mockGetSRLRawScores
 }))
 jest.unstable_mockModule('../../services/scoring/conceptScoreService.js', () => ({
-    computeAndStoreRawScore:  mockComputeAndStoreRawScore,
-    getAllScoresForChatbot:    jest.fn().mockResolvedValue('')
+    computeAndStoreRawScore: mockComputeAndStoreRawScore,
+    getAllScoresForChatbot:   jest.fn()
 }))
 
 // ── Dynamic import after mocks ──────────────────────────────────────────────────
@@ -55,6 +56,7 @@ beforeEach(() => {
     mockComputeAndStoreRawScore.mockReset()
     mockLogError.mockReset()
     mockLogInfo.mockReset()
+    mockPool.query.mockReset()
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -90,6 +92,8 @@ describe('computeConceptScore', () => {
 
         expect(result).toEqual(HAPPY_RESULT)
         expect(mockComputeAndStoreRawScore).toHaveBeenCalledWith('user-1', 'sleep', HAPPY_RAW_SCORES)
+        expect(mockGetSleepRawScores).toHaveBeenCalledTimes(1)
+        expect(mockGetSleepRawScores).toHaveBeenCalledWith(mockPool, 'user-1')
     })
 
     test('returns null and logs error when annotation service throws', async () => {
@@ -99,7 +103,7 @@ describe('computeConceptScore', () => {
 
         expect(result).toBeNull()
         expect(mockLogError).toHaveBeenCalledWith(
-            expect.stringContaining('Error computing sleep score')
+            expect.stringContaining('Error computing sleep score: DB connection lost')
         )
     })
 })
@@ -123,6 +127,11 @@ describe('computeAllScores', () => {
         expect(results).toHaveProperty('screen_time')
         expect(results).toHaveProperty('lms')
         expect(results).toHaveProperty('srl')
+        expect(mockGetSleepRawScores).toHaveBeenCalledTimes(1)
+        expect(mockGetScreenTimeRawScores).toHaveBeenCalledTimes(1)
+        expect(mockGetLMSRawScores).toHaveBeenCalledTimes(1)
+        expect(mockGetSRLRawScores).toHaveBeenCalledTimes(1)
+        expect(mockComputeAndStoreRawScore).toHaveBeenCalledTimes(4)
     })
 
     test('one failing concept does not prevent the others from running', async () => {
