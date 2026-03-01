@@ -11,14 +11,13 @@ import session from 'express-session'
 
 // ── Mock functions ─────────────────────────────────────────────────────────────
 const mockQuery    = jest.fn()
-const mockLogWarn  = jest.fn()
 
 // ── ESM module mocks ──────────────────────────────────────────────────────────
 jest.unstable_mockModule('../../../config/database.js', () => ({
     default: { query: mockQuery }
 }))
 jest.unstable_mockModule('../../../utils/logger.js', () => ({
-    default: { info: jest.fn(), error: jest.fn(), warn: mockLogWarn, debug: jest.fn() }
+    default: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
 }))
 
 // ── Dynamic imports after mocks ────────────────────────────────────────────────
@@ -131,6 +130,12 @@ describe('GET /api/mood/history', () => {
         const res = await request(buildApp()).get('/api/mood/history?surveyId=s1')
         expect(res.status).toBe(404)
         expect(res.body.error).toBe('survey_not_found')
+    })
+
+    test('returns 400 for invalid period', async () => {
+        const res = await request(buildApp()).get('/api/mood/history?surveyId=s1&period=badperiod')
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('invalid period')
     })
 
     test('returns time-bucketed chart points for period=today', async () => {
