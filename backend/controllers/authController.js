@@ -48,14 +48,16 @@ export const register = asyncRoute(async (req, res) => {
         req.session.user = user
         logger.info(`User registered: ${email}`)
 
-        // Generate simulated data (Sleep + SRL) via Orchestrator
-        // Using await to ensure data is ready before redirecting to Home
-        try {
-            await generateStudentData(pool, user.id)
-            logger.info(`Simulation data generated for user ${user.id}`)
-        } catch (simErr) {
-            // Log but don't fail registration if simulation fails
-            logger.error(`Failed to generate simulation data for user ${user.id}: ${simErr.message}`)
+        // Generate simulated data via Orchestrator (dev/test only).
+        // Skipped when SIMULATION_MODE=false so production users start with a clean slate.
+        if (process.env.SIMULATION_MODE !== 'false') {
+            try {
+                await generateStudentData(pool, user.id)
+                logger.info(`Simulation data generated for user ${user.id}`)
+            } catch (simErr) {
+                // Log but don't fail registration if simulation fails
+                logger.error(`Failed to generate simulation data for user ${user.id}: ${simErr.message}`)
+            }
         }
 
         res.status(201).json(user)
