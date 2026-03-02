@@ -309,7 +309,7 @@ const Chatbot = ({ isLoggedIn }: ChatbotProps) => {
         setTimeout(sendMessage, 50)
     }
 
-    const handleKeyPress = (e: React.KeyboardEvent) => {
+    const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
             sendMessage()
@@ -503,7 +503,7 @@ const Chatbot = ({ isLoggedIn }: ChatbotProps) => {
                             placeholder="Type a message..."
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
-                            onKeyPress={handleKeyPress}
+                            onKeyDown={handleKeyDown}
                             disabled={isLoading || isResetting}
                             maxLength={5000}
                         />

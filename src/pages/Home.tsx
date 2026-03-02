@@ -7,6 +7,7 @@ import AdminClusterDiagnosticsPanel from '../components/AdminClusterDiagnosticsP
 import ScoreBoard from '../components/ScoreBoard'
 import { useReduxSelector, useReduxDispatch } from '../redux'
 import { load } from '../redux/surveys'
+import { api } from '../api/client'
 import { getScores } from '../api/scores'
 import { getTodaySleep } from '../api/sleep'
 import { getTodayScreenTime } from '../api/screenTime'
@@ -74,8 +75,7 @@ const Home = () => {
     useEffect(() => {
         if (isAdmin && selectedStudentId) {
             setScoresLoading(true)
-            fetch(`/api/admin/students/${selectedStudentId}/scores`, { credentials: 'include' })
-                .then(res => res.json())
+            api.get<{ scores: ConceptScore[] }>(`/admin/students/${selectedStudentId}/scores`)
                 .then(data => {
                     if (data.scores) setConceptScores(data.scores)
                     setScoresLoading(false)

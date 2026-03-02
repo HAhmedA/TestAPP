@@ -22,6 +22,8 @@ async function recomputeAllActiveUserScores() {
 
     try {
         // Collect distinct user IDs that have submitted real data recently.
+        // lms_sessions is included so students whose only recent activity is LMS
+        // engagement (no sleep/screen-time logged) are still rescored nightly.
         const { rows } = await pool.query(`
             SELECT DISTINCT user_id FROM (
                 SELECT user_id FROM public.sleep_sessions
@@ -34,6 +36,10 @@ async function recomputeAllActiveUserScores() {
                 UNION
                 SELECT user_id FROM public.srl_responses
                     WHERE submitted_at >= NOW() - INTERVAL '30 days'
+                UNION
+                SELECT user_id FROM public.lms_sessions
+                    WHERE is_simulated = false
+                    AND session_date >= CURRENT_DATE - INTERVAL '30 days'
             ) active_users
         `);
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { api } from '../api/client'
 
 interface CandidateRow {
     k: number
@@ -118,11 +119,7 @@ const AdminClusterDiagnosticsPanel = () => {
     const [collapsed, setCollapsed] = useState(true)
 
     useEffect(() => {
-        fetch('/api/admin/cluster-diagnostics', { credentials: 'include' })
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`)
-                return res.json()
-            })
+        api.get<{ diagnostics: ConceptDiagnostic[] }>('/admin/cluster-diagnostics')
             .then(data => {
                 setDiagnostics(data.diagnostics || [])
                 setLoading(false)
@@ -134,11 +131,7 @@ const AdminClusterDiagnosticsPanel = () => {
     }, [])
 
     useEffect(() => {
-        fetch('/api/admin/cluster-members', { credentials: 'include' })
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`)
-                return res.json()
-            })
+        api.get<{ members: ClusterMember[] }>('/admin/cluster-members')
             .then(data => {
                 setMembers(data.members || [])
                 setMembersLoading(false)
