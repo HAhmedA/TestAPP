@@ -15,7 +15,7 @@ import { generateMockRestData } from '../services/moodleEventSimulator.js'
 import { aggregateToDaily } from '../services/moodleService.js'
 import { withTransaction } from '../utils/withTransaction.js'
 import { computeJudgments } from '../services/annotators/lmsAnnotationService.js'
-import { computeAllScores } from '../services/scoring/scoreComputationService.js'
+import { computeAllScores } from '../services/scoring/index.js'
 
 const DAYS = 40
 
@@ -129,40 +129,42 @@ async function main() {
     console.log(`\nSeed LMS Sessions — ${DAYS} days for test1–test20`)
     console.log('─────────────────────────────────────────────────\n')
 
-    // Query all test students with their assigned profile
-    const { rows: students } = await pool.query(`
-        SELECT u.id, u.email, sp.simulated_profile AS profile
-        FROM public.users u
-        JOIN public.student_profiles sp ON sp.user_id = u.id
-        WHERE u.email ~ '^test[0-9]+@example\\.com$'
-        ORDER BY u.email
-    `)
+    try {
+        // Query all test students with their assigned profile
+        const { rows: students } = await pool.query(`
+            SELECT u.id, u.email, sp.simulated_profile AS profile
+            FROM public.users u
+            JOIN public.student_profiles sp ON sp.user_id = u.id
+            WHERE u.email ~ '^test[0-9]+@example\\.com$'
+            ORDER BY u.email
+        `)
 
-    if (students.length === 0) {
-        console.error('No test students found. Run migrations first.')
-        process.exit(1)
-    }
-
-    console.log(`Found ${students.length} test students\n`)
-
-    let totalDays = 0
-    let failed    = 0
-
-    for (const student of students) {
-        try {
-            totalDays += await seedUser(student.id, student.email, student.profile || 'average')
-        } catch (err) {
-            console.error(`  ✗ ${student.email}: ${err.message}`)
-            failed++
+        if (students.length === 0) {
+            console.error('No test students found. Run migrations first.')
+            process.exit(1)
         }
+
+        console.log(`Found ${students.length} test students\n`)
+
+        let totalDays = 0
+        let failed    = 0
+
+        for (const student of students) {
+            try {
+                totalDays += await seedUser(student.id, student.email, student.profile || 'average')
+            } catch (err) {
+                console.error(`  ✗ ${student.email}: ${err.message}`)
+                failed++
+            }
+        }
+
+        console.log('\n─────────────────────────────────────────────────')
+        console.log(`Done!  Students: ${students.length - failed}/${students.length}  Total days seeded: ${totalDays}`)
+        if (failed > 0) console.warn(`  ${failed} student(s) failed — check errors above`)
+        console.log()
+    } finally {
+        await pool.end()
     }
-
-    console.log('\n─────────────────────────────────────────────────')
-    console.log(`Done!  Students: ${students.length - failed}/${students.length}  Total days seeded: ${totalDays}`)
-    if (failed > 0) console.warn(`  ${failed} student(s) failed — check errors above`)
-    console.log()
-
-    await pool.end()
 }
 
 main().catch(err => {
