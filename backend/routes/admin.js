@@ -6,7 +6,8 @@ import { requireAdmin } from '../middleware/auth.js'
 import { DEFAULT_ALIGNMENT_PROMPT } from '../services/alignmentService.js'
 import { getAnnotations } from '../services/annotators/srlAnnotationService.js'
 import { asyncRoute, Errors } from '../utils/errors.js'
-import { CONCEPT_NAMES } from '../config/concepts.js'
+import { CONCEPT_NAMES, CONCEPT_IDS } from '../config/concepts.js'
+import { getConceptPoolSizes, getUserConceptDataSet } from '../services/scoring/scoreQueryService.js'
 
 const router = Router()
 
@@ -165,8 +166,38 @@ router.get('/students/:studentId/scores', asyncRoute(async (req, res) => {
             dialMin: clusterInfo[row.concept_id]?.dialMin || 0,
             dialCenter: clusterInfo[row.concept_id]?.dialCenter || 50,
             dialMax: clusterInfo[row.concept_id]?.dialMax || 100,
-            computedAt: row.computed_at
+            computedAt: row.computed_at,
+            coldStart: false
         }))
+
+        // Add cold-start placeholder for concepts where the student has data
+        // but the pool is too small for clustering (mirrors /api/scores logic).
+        const MIN_CLUSTER_USERS = 10
+        const [poolSizes, userHasData] = await Promise.all([
+            getConceptPoolSizes(7),
+            getUserConceptDataSet(studentId)
+        ])
+        const scoredConceptIds = new Set(rows.map(r => r.concept_id))
+        for (const conceptId of CONCEPT_IDS) {
+            if (!scoredConceptIds.has(conceptId) && userHasData.has(conceptId)) {
+                if ((poolSizes[conceptId] || 0) < MIN_CLUSTER_USERS) {
+                    scores.push({
+                        conceptId,
+                        conceptName: CONCEPT_NAMES[conceptId],
+                        score: null,
+                        trend: null,
+                        breakdown: null,
+                        yesterdayScore: null,
+                        clusterLabel: null,
+                        dialMin: 0,
+                        dialCenter: 50,
+                        dialMax: 100,
+                        computedAt: null,
+                        coldStart: true
+                    })
+                }
+            }
+        }
 
         res.json({ scores })
 }))
@@ -242,6 +273,31 @@ router.get('/cluster-members', asyncRoute(async (req, res) => {
         breakdown: r.aspect_breakdown || null
     }))
     res.json({ members })
+}))
+
+// Delete all student data (keeps users, profiles, surveys, prompts, csv logs)
+router.delete('/clear-student-data', asyncRoute(async (req, res) => {
+    await pool.query(`
+        DELETE FROM public.sleep_judgments;
+        DELETE FROM public.sleep_baselines;
+        DELETE FROM public.sleep_sessions;
+        DELETE FROM public.screen_time_judgments;
+        DELETE FROM public.screen_time_baselines;
+        DELETE FROM public.screen_time_sessions;
+        DELETE FROM public.lms_judgments;
+        DELETE FROM public.lms_baselines;
+        DELETE FROM public.lms_sessions;
+        DELETE FROM public.srl_annotations;
+        DELETE FROM public.srl_responses;
+        DELETE FROM public.questionnaire_results;
+        DELETE FROM public.concept_score_history;
+        DELETE FROM public.concept_scores;
+        DELETE FROM public.user_cluster_assignments;
+        DELETE FROM public.peer_clusters;
+        DELETE FROM public.cluster_run_diagnostics;
+    `)
+    logger.warn(`Admin ${req.session.user?.email} cleared all student data`)
+    res.json({ cleared: true })
 }))
 
 // Legacy routes for backwards compatibility

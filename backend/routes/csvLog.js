@@ -1,8 +1,8 @@
 // CSV Log Admin Routes
 // All routes require admin privileges.
-// File upload uses express.raw() — no multer dependency.
+// File upload body is parsed globally in server.js (express.raw text/csv, 10mb limit).
 
-import express, { Router } from 'express'
+import { Router } from 'express'
 import pool from '../config/database.js'
 import logger from '../utils/logger.js'
 import { requireAdmin } from '../middleware/auth.js'
@@ -20,7 +20,6 @@ router.use(requireAdmin)
 // =============================================================================
 router.post(
     '/admin/csv/upload',
-    express.raw({ type: 'text/csv', limit: '10mb' }),
     asyncRoute(async (req, res) => {
         const csvContent = req.body?.toString('utf8') || ''
         if (!csvContent.trim()) throw Errors.VALIDATION('CSV body is empty')
@@ -125,6 +124,46 @@ router.delete('/admin/csv/mapping/:csvName', asyncRoute(async (req, res) => {
     )
     if (rowCount === 0) throw Errors.NOT_FOUND('Mapping')
     res.json({ deleted: true, csvName })
+}))
+
+// =============================================================================
+// DELETE MAPPING + LMS DATA
+// DELETE /api/lms/admin/csv/mapping/:csvName/with-data
+// Removes the alias mapping AND all non-simulated lms_sessions for that user.
+// =============================================================================
+router.delete('/admin/csv/mapping/:csvName/with-data', asyncRoute(async (req, res) => {
+    const csvName = decodeURIComponent(req.params.csvName)
+
+    // Resolve user_id before deleting the mapping row
+    const { rows: aliasRows } = await pool.query(
+        `SELECT user_id FROM public.csv_participant_aliases WHERE csv_name = $1`,
+        [csvName]
+    )
+    if (aliasRows.length === 0) throw Errors.NOT_FOUND('Mapping')
+    const userId = aliasRows[0].user_id
+
+    const client = await pool.connect()
+    try {
+        await client.query('BEGIN')
+
+        const { rowCount: sessionsDeleted } = await client.query(
+            `DELETE FROM public.lms_sessions WHERE user_id = $1 AND is_simulated = false`,
+            [userId]
+        )
+        await client.query(
+            `DELETE FROM public.csv_participant_aliases WHERE csv_name = $1`,
+            [csvName]
+        )
+
+        await client.query('COMMIT')
+        logger.info(`CSV wipe: removed mapping and ${sessionsDeleted} sessions for user ${userId} (csv_name=${csvName})`)
+        res.json({ deleted: true, csvName, sessionsDeleted })
+    } catch (err) {
+        await client.query('ROLLBACK')
+        throw err
+    } finally {
+        client.release()
+    }
 }))
 
 // =============================================================================

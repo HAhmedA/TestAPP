@@ -59,6 +59,10 @@ const Home = () => {
     const [selectedStudentId, setSelectedStudentId] = useState<string>('')
     const [selectedStudentName, setSelectedStudentName] = useState<string>('')
 
+    // Clear all student data state
+    const [clearConfirming, setClearConfirming] = useState(false)
+    const [clearLoading, setClearLoading] = useState(false)
+
     // Submission reminder state (only for non-admin students)
     const [missingSleepLog, setMissingSleepLog] = useState(false)
     const [missingScreenTime, setMissingScreenTime] = useState(false)
@@ -154,6 +158,52 @@ const Home = () => {
 
                     {/* CSV activity log upload panel */}
                     <AdminCsvLogPanel />
+
+                    {/* Danger zone: clear all student data */}
+                    <div className='mood-card' style={{ marginTop: '16px', borderColor: '#dc2626' }}>
+                        <h2 className='mood-card-title' style={{ color: '#dc2626' }}>Danger Zone</h2>
+                        <div className='mood-card-content'>
+                            {!clearConfirming ? (
+                                <button
+                                    className='btn-danger'
+                                    onClick={() => setClearConfirming(true)}
+                                >
+                                    Clear All Student Data
+                                </button>
+                            ) : (
+                                <div className='clear-confirm-block'>
+                                    <p className='clear-confirm-text'>
+                                        Are you sure? This permanently deletes all sleep, screen time, LMS, and SRL data for every student. This cannot be undone.
+                                    </p>
+                                    <div className='clear-confirm-actions'>
+                                        <button
+                                            className='btn-danger'
+                                            disabled={clearLoading}
+                                            onClick={async () => {
+                                                setClearLoading(true)
+                                                try {
+                                                    await api.delete('/admin/clear-student-data')
+                                                    window.location.reload()
+                                                } catch {
+                                                    setClearLoading(false)
+                                                    setClearConfirming(false)
+                                                }
+                                            }}
+                                        >
+                                            {clearLoading ? 'Clearing…' : 'Yes, delete everything'}
+                                        </button>
+                                        <button
+                                            className='btn-secondary'
+                                            disabled={clearLoading}
+                                            onClick={() => setClearConfirming(false)}
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
 
                     {/* Student dashboard – shown when a student is selected */}
                     {selectedStudentId && selectedStudentName && (

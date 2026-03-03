@@ -481,7 +481,7 @@ async function batchComputeClusterScores(conceptId, days = 7) {
         return { coldStart: true, usersScored: 0 };
     }
 
-    const { userIds, composites, clusterRemap, clusterMeans, k, model, labels } = fit;
+    const { allMetrics, userIds, composites, clusterRemap, clusterMeans, k, model, dims, labels } = fit;
 
     await withTransaction(pool, async (client) => {
         await storeClusterResults(conceptId, composites, clusterRemap, clusterMeans, k, model, client);
@@ -506,8 +506,26 @@ async function batchComputeClusterScores(conceptId, days = 7) {
         }
     });
 
+    // Build per-user domain results with categories so callers can write concept_scores
+    // without re-running PGMoE.
+    const userResults = userIds.map((uid, i) => {
+        const userComposite = composites[i].composite;
+        const { domainScores } = computeCompositeScore(allMetrics[uid], allMetrics, dims);
+        const domains = domainScores.map(ds => ({
+            domain: ds.domain,
+            numericScore: Math.round(ds.score * 100) / 100,
+            category: ds.score >= SCORE_THRESHOLDS.VERY_GOOD ? 'very_good'
+                    : ds.score >= SCORE_THRESHOLDS.GOOD ? 'good'
+                    : 'requires_improvement',
+            categoryLabel: ds.score >= SCORE_THRESHOLDS.VERY_GOOD ? 'Very Good'
+                         : ds.score >= SCORE_THRESHOLDS.GOOD ? 'Good'
+                         : 'Could Improve'
+        }));
+        return { userId: uid, composite: Math.round(userComposite * 100) / 100, domains };
+    });
+
     logger.info(`batchComputeClusterScores: ${conceptId} — ${userIds.length} users scored in one run`);
-    return { usersScored: userIds.length, conceptId };
+    return { usersScored: userIds.length, conceptId, userResults };
 }
 
 // =============================================================================

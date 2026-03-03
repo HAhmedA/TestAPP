@@ -175,6 +175,15 @@ describe('GET /api/admin/students/:studentId/scores', () => {
         mockQuery.mockResolvedValueOnce({ rows: [] })
         // cluster info
         mockQuery.mockResolvedValueOnce({ rows: [] })
+        // getConceptPoolSizes (all concepts have enough users → no cold-start entries added)
+        mockQuery.mockResolvedValueOnce({ rows: [
+            { concept: 'sleep', user_count: '15' },
+            { concept: 'screen_time', user_count: '15' },
+            { concept: 'lms', user_count: '15' },
+            { concept: 'srl', user_count: '15' }
+        ]})
+        // getUserConceptDataSet
+        mockQuery.mockResolvedValueOnce({ rows: [{ concept: 'sleep' }] })
 
         const res = await request(buildApp()).get('/api/admin/students/student-1/scores')
         expect(res.status).toBe(200)

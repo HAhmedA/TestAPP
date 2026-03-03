@@ -137,6 +137,51 @@ function computeEalt(events) {
 
 function parseMoodleTime(timeStr) {
     if (!timeStr) return null
+
+    // ── Format 1: YYYY-MM-DD HH:MM:SS  (ISO-like, 24-hour, no T separator)
+    //   e.g. "2019-10-26 09:37:12"
+    const isoSpaceMatch = timeStr.match(
+        /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/
+    )
+    if (isoSpaceMatch) {
+        const [, year, month, day, hour, min, sec] = isoSpaceMatch
+        const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day),
+                           parseInt(hour), parseInt(min), parseInt(sec))
+        return isNaN(d.getTime()) ? null : d
+    }
+
+    // ── Format 2: M/D/YYYY H:MM:SS AM/PM  (US locale, 12-hour)
+    //   e.g. "10/15/2019 3:47:25 PM"
+    const usMatch = timeStr.match(
+        /^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)/i
+    )
+    if (usMatch) {
+        const [, month, day, year, rawHour, min, sec, meridiem] = usMatch
+        let hour = parseInt(rawHour)
+        if (meridiem.toUpperCase() === 'PM' && hour !== 12) hour += 12
+        if (meridiem.toUpperCase() === 'AM' && hour === 12) hour = 0
+        const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day),
+                           hour, parseInt(min), parseInt(sec))
+        return isNaN(d.getTime()) ? null : d
+    }
+
+    // ── Format 3: D/M/YY HH:MM:SS  (Moodle numeric locale, 24-hour)
+    //   e.g. "30/05/25, 21:28:10"
+    // new Date() treats slashes as M/D/Y which breaks this format for day≤12,
+    // so we parse it explicitly.
+    const moodleNumericMatch = timeStr.match(
+        /^(\d{1,2})\/(\d{1,2})\/(\d{2,4}),?\s+(\d{1,2}):(\d{2}):(\d{2})/
+    )
+    if (moodleNumericMatch) {
+        const [, day, month, year, hour, min, sec] = moodleNumericMatch
+        const fullYear = year.length === 2 ? 2000 + parseInt(year) : parseInt(year)
+        const d = new Date(fullYear, parseInt(month) - 1, parseInt(day),
+                           parseInt(hour), parseInt(min), parseInt(sec))
+        return isNaN(d.getTime()) ? null : d
+    }
+
+    // ── Format 4: "D Month YYYY, H:MM:SS AM/PM"  (Moodle English locale)
+    //   e.g. "1 March 2026, 10:00:00 AM" — new Date() handles this on V8.
     const d = new Date(timeStr.replace(',', ''))
     return isNaN(d.getTime()) ? null : d
 }
@@ -330,14 +375,8 @@ async function processUpload(uploadId) {
 
         // ── Phase 2: single batch rescore after all writes complete ───────────
         if (importedMappings.length > 0) {
-            // Compute the widest window needed to cover all imported sessions
-            const allDates  = importedMappings.flatMap(m => m.dailyRows.map(r => new Date(r.session_date).getTime()))
-            const maxMs     = Math.max(...allDates)
-            const daysSince = Math.ceil((Date.now() - maxMs) / 86400000)
-            const scoringDays = Math.max(7, daysSince + 7)
-
-            // ONE PGMoE run — all students scored against the same complete pool
-            batchScoreLMSCohort(scoringDays).catch(err =>
+            // ONE PGMoE run — all students scored against the same complete pool (all-time window)
+            batchScoreLMSCohort().catch(err =>
                 logger.error(`CSV import: batchScoreLMSCohort error: ${err.message}`)
             )
 

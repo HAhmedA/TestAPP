@@ -3,7 +3,8 @@
 
 import { useState, useEffect } from 'react'
 import {
-    uploadCsvLog, getCsvMappings, createCsvMapping, deleteCsvMapping, importCsvLog,
+    uploadCsvLog, getCsvMappings, createCsvMapping, deleteCsvMapping,
+    deleteCsvMappingWithData, importCsvLog,
     type CsvUploadResult, type CsvMapping, type CsvImportResult
 } from '../api/csvLog'
 
@@ -60,12 +61,31 @@ const AdminCsvLogPanel = () => {
         ? uploadResult.csvNames
         : Array.from(new Set(mappings.map(m => m.csv_name)))
 
-    const filteredStudents = appStudents.filter(
-        s => !pairedEmails.has(s.id) && s.email.toLowerCase().includes(searchA.toLowerCase())
-    )
-    const filteredCsvNames = csvNames.filter(
-        n => !pairedCsvNames.has(n) && n.toLowerCase().includes(searchB.toLowerCase())
-    )
+    const filteredStudents = appStudents
+        .filter(s => !pairedEmails.has(s.id) && s.email.toLowerCase().includes(searchA.toLowerCase()))
+        .sort((a, b) => (a.email === selectedEmail ? -1 : b.email === selectedEmail ? 1 : 0))
+    const filteredCsvNames = csvNames
+        .filter(n => !pairedCsvNames.has(n) && n.toLowerCase().includes(searchB.toLowerCase()))
+        .sort((a, b) => (a === selectedCsvName ? -1 : b === selectedCsvName ? 1 : 0))
+
+    // Auto-select the first item in each list when no selection exists.
+    // Deps use list length, not the full array, to avoid triggering on every
+    // render. This fires on initial load, on phase change, and after a pair is
+    // made (when the list shrinks by one and selections are cleared).
+    // NOT adding selectedEmail/selectedCsvName to deps intentionally — we only
+    // want to auto-select on structural list changes, not when the user explicitly
+    // deselects an item by clicking it again.
+    useEffect(() => {
+        if (phase !== 'mapping') return
+        if (!selectedEmail && filteredStudents.length > 0)
+            setSelectedEmail(filteredStudents[0].email)
+    }, [phase, filteredStudents.length])  // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (phase !== 'mapping') return
+        if (!selectedCsvName && filteredCsvNames.length > 0)
+            setSelectedCsvName(filteredCsvNames[0])
+    }, [phase, filteredCsvNames.length])  // eslint-disable-line react-hooks/exhaustive-deps
 
     // -- Handlers --
 
@@ -121,6 +141,19 @@ const AdminCsvLogPanel = () => {
             setMappings(prev => prev.filter(m => m.csv_name !== csvName))
         } catch (err: any) {
             alert(`Could not remove pair: ${err.message}`)
+        }
+    }
+
+    const handleDeletePairWithData = async (csvName: string, email: string) => {
+        if (!window.confirm(
+            `Delete pair AND all imported LMS sessions for ${email}?\n\nThis cannot be undone.`
+        )) return
+        try {
+            const result = await deleteCsvMappingWithData(csvName)
+            setMappings(prev => prev.filter(m => m.csv_name !== csvName))
+            alert(`Removed pair and ${result.sessionsDeleted} LMS session row${result.sessionsDeleted !== 1 ? 's' : ''} for ${email}.`)
+        } catch (err: any) {
+            alert(`Could not wipe data: ${err.message}`)
         }
     }
 
@@ -277,8 +310,13 @@ const AdminCsvLogPanel = () => {
                                     <button
                                         className='admin-csv-pair-delete'
                                         onClick={() => handleDeletePair(m.csv_name)}
-                                        title='Remove pair'
+                                        title='Remove pair only'
                                     >✕</button>
+                                    <button
+                                        className='admin-csv-pair-wipe'
+                                        onClick={() => handleDeletePairWithData(m.csv_name, m.email)}
+                                        title='Delete pair and all imported LMS data'
+                                    >⊗</button>
                                 </div>
                             ))}
                         </div>

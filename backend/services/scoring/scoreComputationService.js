@@ -26,7 +26,7 @@ import { getRawScoresForScoring as getSRLRawScores } from '../annotators/srlAnno
  * @param {string} conceptId - Concept ID
  * @returns {Promise<{score: number, trend: string}|null>}
  */
-async function computeConceptScore(userId, conceptId) {
+async function computeConceptScore(userId, conceptId, lmsDays = 7) {
     let rawScores = [];
 
     try {
@@ -38,7 +38,7 @@ async function computeConceptScore(userId, conceptId) {
                 rawScores = await getScreenTimeRawScores(pool, userId);
                 break;
             case 'lms':
-                rawScores = await getLMSRawScores(pool, userId);
+                rawScores = await getLMSRawScores(pool, userId, lmsDays);
                 break;
             case 'srl':
                 rawScores = await getSRLRawScores(pool, userId);
@@ -75,14 +75,14 @@ async function computeConceptScore(userId, conceptId) {
  * @param {string} userId - User ID
  * @returns {Promise<Object>} - Object with all computed scores
  */
-async function computeAllScores(userId) {
+async function computeAllScores(userId, lmsDays = 7) {
     logger.info(`Computing all concept scores for user ${userId}`);
 
     const concepts = CONCEPT_IDS;
     const results = {};
 
     for (const conceptId of concepts) {
-        const result = await computeConceptScore(userId, conceptId);
+        const result = await computeConceptScore(userId, conceptId, lmsDays);
         if (result) {
             results[conceptId] = result;
         }
@@ -99,13 +99,25 @@ async function computeAllScores(userId) {
  * Batch-score all users for the LMS concept in a single PGMoE run.
  * Call after a bulk CSV import so every imported student is scored against
  * the same complete, stable pool.
+ * Uses null (all-time window) so no student is excluded by a date cutoff.
  *
- * @param {number} lmsDays - Look-back window (default 7)
  * @returns {Promise<{coldStart?: boolean, usersScored: number}>}
  */
-async function batchScoreLMSCohort(lmsDays = 7) {
-    logger.info(`batchScoreLMSCohort: scoring all users, window=${lmsDays} days`);
-    const result = await batchComputeClusterScores('lms', lmsDays);
+async function batchScoreLMSCohort() {
+    logger.info('batchScoreLMSCohort: scoring all users (all-time window)');
+    const result = await batchComputeClusterScores('lms', null);
+
+    // Write concept_scores for each user using the domain results already computed
+    // during the batch run — no need to re-run PGMoE per user.
+    if (!result.coldStart && result.userResults?.length > 0) {
+        for (const { userId, domains } of result.userResults) {
+            await computeAndStoreRawScore(userId, 'lms', domains).catch(err =>
+                logger.error(`batchScoreLMSCohort: concept_scores write failed for ${userId}: ${err.message}`)
+            );
+        }
+        logger.info(`batchScoreLMSCohort: concept_scores written for ${result.userResults.length} users`);
+    }
+
     logger.info(`batchScoreLMSCohort complete: ${result?.usersScored ?? 0} users scored`);
     return result;
 }

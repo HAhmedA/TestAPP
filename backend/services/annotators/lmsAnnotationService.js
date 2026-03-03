@@ -474,9 +474,9 @@ async function getJudgmentsForChatbot(pool, userId) {
  * Get cluster-based scores for scoring aggregation
  * Uses PGMoE clustering + percentile scoring instead of Z-scores
  */
-async function getRawScoresForScoring(pool, userId) {
+async function getRawScoresForScoring(pool, userId, days = 7) {
     const { computeClusterScores } = await import('../scoring/clusterPeerService.js');
-    const clusterResult = await computeClusterScores(pool, 'lms', userId);
+    const clusterResult = await computeClusterScores(pool, 'lms', userId, days);
 
     if (!clusterResult) return [];
     if (clusterResult.coldStart) return [{ coldStart: true }];

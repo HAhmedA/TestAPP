@@ -80,6 +80,14 @@ export const deleteCsvMapping = (csvName: string) =>
     )
 
 /**
+ * Delete a mapping AND all non-simulated lms_sessions for the linked user.
+ */
+export const deleteCsvMappingWithData = (csvName: string) =>
+    api.delete<{ deleted: boolean; csvName: string; sessionsDeleted: number }>(
+        `/lms/admin/csv/mapping/${encodeURIComponent(csvName)}/with-data`
+    )
+
+/**
  * Trigger import for a stored upload using current mappings.
  */
 export const importCsvLog = (uploadId: string) =>

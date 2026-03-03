@@ -113,7 +113,7 @@ async function getLMSMetrics(days) {
                + LEAST(SUM(forum_posts), 2) / 2.0 * 33.0
                AS participation_score
         FROM public.lms_sessions
-        WHERE session_date >= CURRENT_DATE - ($1 * INTERVAL '1 day')
+        WHERE ($1::int IS NULL OR session_date >= CURRENT_DATE - ($1 * INTERVAL '1 day'))
         ${EXCLUDE_SIMULATED_USERS}
         GROUP BY user_id
     `, [days])

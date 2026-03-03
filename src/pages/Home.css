@@ -703,6 +703,19 @@
 
 .admin-csv-pair-delete:hover { color: #ef4444; }
 
+.admin-csv-pair-wipe {
+    background: none;
+    border: none;
+    color: #f87171;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s;
+}
+
+.admin-csv-pair-wipe:hover { color: #dc2626; }
+
 .admin-csv-import-btn {
     padding: 10px 24px;
     background: #3b82f6;
@@ -774,4 +787,54 @@
     flex-direction: column;
     gap: 8px;
     margin-top: 8px;
+}
+
+/* Danger zone — clear all student data */
+.btn-danger {
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-danger:hover:not(:disabled) { background: #b91c1c; }
+.btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-secondary:hover:not(:disabled) { background: #e5e7eb; }
+.btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.clear-confirm-block {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.clear-confirm-text {
+    margin: 0;
+    font-size: 14px;
+    color: #7f1d1d;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    padding: 10px 14px;
+}
+
+.clear-confirm-actions {
+    display: flex;
+    gap: 10px;
 }

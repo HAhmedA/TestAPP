@@ -25,6 +25,7 @@ router.post('/logout', logout)
 router.get('/me', getMe)
 
 router.use('/', surveyRoutes) // Mounts directly since paths are like /api/create, /api/getActive
+
 router.use('/', resultRoutes) // Mounts directly for /api/results, /api/post etc.
 
 // Namespaced routes

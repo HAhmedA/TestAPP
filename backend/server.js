@@ -53,11 +53,15 @@ const corsOptions = {
   origin: corsOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Filename']
 }
 
 app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
+
+// Parse CSV upload bodies before JSON — must come first so text/csv requests
+// are claimed with the 10mb limit before express.json sees them.
+app.use(express.raw({ type: 'text/csv', limit: '10mb' }))
 
 // Parse JSON request bodies
 app.use(express.json({ limit: '50kb' }))
