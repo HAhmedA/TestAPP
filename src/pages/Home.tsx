@@ -5,6 +5,7 @@ import SleepSlider from '../components/SleepSlider'
 import AdminStudentViewer from '../components/AdminStudentViewer'
 import AdminClusterDiagnosticsPanel from '../components/AdminClusterDiagnosticsPanel'
 import AdminCsvLogPanel from '../components/AdminCsvLogPanel'
+import AdminLlmConfigPanel from '../components/AdminLlmConfigPanel'
 import ScoreBoard from '../components/ScoreBoard'
 import { useReduxSelector, useReduxDispatch } from '../redux'
 import { load } from '../redux/surveys'
@@ -158,6 +159,9 @@ const Home = () => {
 
                     {/* CSV activity log upload panel */}
                     <AdminCsvLogPanel />
+
+                    {/* LLM configuration panel */}
+                    <AdminLlmConfigPanel />
 
                     {/* Danger zone: clear all student data */}
                     <div className='mood-card' style={{ marginTop: '16px', borderColor: '#dc2626' }}>
