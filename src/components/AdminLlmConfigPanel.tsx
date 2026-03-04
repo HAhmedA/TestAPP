@@ -18,6 +18,7 @@ const AdminLlmConfigPanel: React.FC = () => {
     const [form, setForm] = useState<Partial<LlmConfig>>({})
     const [showKey, setShowKey] = useState(false)
     const [saveMsg, setSaveMsg] = useState<string | null>(null)
+    const [saveFailed, setSaveFailed] = useState(false)
 
     useEffect(() => { dispatch(fetchLlmConfig()) }, [dispatch])
 
@@ -35,11 +36,16 @@ const AdminLlmConfigPanel: React.FC = () => {
 
     const handleSave = async () => {
         setSaveMsg(null)
+        setSaveFailed(false)
         const result = await dispatch(updateLlmConfig(form))
         if (updateLlmConfig.fulfilled.match(result)) {
             setSaveMsg('Configuration saved.')
+            setSaveFailed(false)
         } else {
-            setSaveMsg(llmConfigError ?? 'Save failed.')
+            // Extract error from the result directly to avoid stale closure on llmConfigError
+            const errMsg = (result.payload as string) ?? (result.error?.message) ?? 'Save failed.'
+            setSaveMsg(errMsg)
+            setSaveFailed(true)
         }
     }
 
@@ -68,7 +74,9 @@ const AdminLlmConfigPanel: React.FC = () => {
 
     return (
         <div style={panelStyle}>
-            <div style={headerStyle} onClick={() => setOpen(o => !o)}>
+            <div style={headerStyle} onClick={() => setOpen(o => !o)}
+                tabIndex={0} role="button"
+                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setOpen(o => !o)}>
                 <span>{open ? '▼' : '▶'} LLM API Configuration</span>
                 {llmConfig?.updatedAt && (
                     <span style={{ fontSize: 11, color: '#888' }}>
@@ -83,6 +91,7 @@ const AdminLlmConfigPanel: React.FC = () => {
                         <label style={labelStyle}>Provider</label>
                         <select value={form.provider || ''} onChange={e => set('provider', e.target.value)}
                             style={{ ...inputStyle }}>
+                            <option value="" disabled>-- select provider --</option>
                             {PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
                     </div>
@@ -114,6 +123,7 @@ const AdminLlmConfigPanel: React.FC = () => {
                                 value={form.apiKey || ''}
                                 onChange={e => set('apiKey', e.target.value)} />
                             <button style={{ ...btnStyle('#333'), padding: '6px 12px' }}
+                                aria-label={showKey ? 'Hide API key' : 'Show API key'}
                                 onClick={() => setShowKey(s => !s)}>
                                 {showKey ? 'Hide' : 'Show'}
                             </button>
@@ -125,19 +135,19 @@ const AdminLlmConfigPanel: React.FC = () => {
                             <label style={labelStyle}>Max Tokens</label>
                             <input style={inputStyle} type="number"
                                 value={form.maxTokens ?? ''}
-                                onChange={e => set('maxTokens', parseInt(e.target.value, 10))} />
+                                onChange={e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) set('maxTokens', v) }} />
                         </div>
                         <div>
                             <label style={labelStyle}>Temperature</label>
                             <input style={inputStyle} type="number" step="0.1" min="0" max="2"
                                 value={form.temperature ?? ''}
-                                onChange={e => set('temperature', parseFloat(e.target.value))} />
+                                onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) set('temperature', v) }} />
                         </div>
                         <div>
                             <label style={labelStyle}>Timeout (ms)</label>
                             <input style={inputStyle} type="number"
                                 value={form.timeoutMs ?? ''}
-                                onChange={e => set('timeoutMs', parseInt(e.target.value, 10))} />
+                                onChange={e => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) set('timeoutMs', v) }} />
                         </div>
                     </div>
 
@@ -159,7 +169,7 @@ const AdminLlmConfigPanel: React.FC = () => {
                             </span>
                         )}
                         {saveMsg && (
-                            <span style={{ color: saveMsg.includes('failed') || saveMsg.includes('Failed') ? '#ef5350' : '#66bb6a', fontSize: 13 }}>
+                            <span style={{ color: saveFailed ? '#ef5350' : '#66bb6a', fontSize: 13 }}>
                                 {saveMsg}
                             </span>
                         )}
