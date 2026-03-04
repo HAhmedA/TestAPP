@@ -19,8 +19,10 @@ interface AdminState {
     error: string | null
     llmConfig: LlmConfig | null
     llmConfigStatus: 'idle' | 'loading' | 'succeeded' | 'failed'
+    llmConfigError: string | null
     llmTestResult: LlmTestResult | null
     llmTestStatus: 'idle' | 'loading' | 'succeeded' | 'failed'
+    llmTestError: string | null
 }
 
 const initialState: AdminState = {
@@ -32,8 +34,10 @@ const initialState: AdminState = {
     error: null,
     llmConfig: null,
     llmConfigStatus: 'idle',
+    llmConfigError: null,
     llmTestResult: null,
-    llmTestStatus: 'idle'
+    llmTestStatus: 'idle',
+    llmTestError: null
 }
 
 // Fetch all prompts (both types)
@@ -76,7 +80,7 @@ export const updateLlmConfig = createAsyncThunk(
     }
 )
 
-export const testLlmConfigThunk = createAsyncThunk(
+export const testLlmConfig = createAsyncThunk(
     'admin/testLlmConfig',
     async (cfg: Partial<LlmConfig>) => {
         const data = await apiTestLlmConfig(cfg)
@@ -155,31 +159,47 @@ const adminSlice = createSlice({
                 state.error = action.error.message || 'Failed to update system prompt'
             })
             // Fetch LLM config
-            .addCase(fetchLlmConfig.pending, (state) => { state.llmConfigStatus = 'loading' })
+            .addCase(fetchLlmConfig.pending, (state) => {
+                state.llmConfigStatus = 'loading'
+                state.llmConfigError = null
+            })
             .addCase(fetchLlmConfig.fulfilled, (state, action) => {
                 state.llmConfigStatus = 'succeeded'
                 state.llmConfig = action.payload
             })
-            .addCase(fetchLlmConfig.rejected, (state) => { state.llmConfigStatus = 'failed' })
+            .addCase(fetchLlmConfig.rejected, (state, action) => {
+                state.llmConfigStatus = 'failed'
+                state.llmConfigError = action.error.message ?? 'Failed to load LLM config'
+            })
 
             // Update LLM config
-            .addCase(updateLlmConfig.pending, (state) => { state.llmConfigStatus = 'loading' })
+            .addCase(updateLlmConfig.pending, (state) => {
+                state.llmConfigStatus = 'loading'
+                state.llmConfigError = null
+            })
             .addCase(updateLlmConfig.fulfilled, (state, action) => {
                 state.llmConfigStatus = 'succeeded'
                 state.llmConfig = action.payload
             })
-            .addCase(updateLlmConfig.rejected, (state) => { state.llmConfigStatus = 'failed' })
+            .addCase(updateLlmConfig.rejected, (state, action) => {
+                state.llmConfigStatus = 'failed'
+                state.llmConfigError = action.error.message ?? 'Failed to save LLM config'
+            })
 
             // Test LLM config
-            .addCase(testLlmConfigThunk.pending, (state) => {
+            .addCase(testLlmConfig.pending, (state) => {
                 state.llmTestStatus = 'loading'
                 state.llmTestResult = null
+                state.llmTestError = null
             })
-            .addCase(testLlmConfigThunk.fulfilled, (state, action) => {
+            .addCase(testLlmConfig.fulfilled, (state, action) => {
                 state.llmTestStatus = 'succeeded'
                 state.llmTestResult = action.payload
             })
-            .addCase(testLlmConfigThunk.rejected, (state) => { state.llmTestStatus = 'failed' })
+            .addCase(testLlmConfig.rejected, (state, action) => {
+                state.llmTestStatus = 'failed'
+                state.llmTestError = action.error.message ?? 'Connection test failed'
+            })
     }
 })
 
