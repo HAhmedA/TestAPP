@@ -20,8 +20,10 @@ ENV REACT_APP_API_BASE=${REACT_APP_API_BASE}
 ARG PUBLIC_URL=""
 ENV PUBLIC_URL=${PUBLIC_URL}
 
-# Build production bundle — cap Node heap for 1 GB RAM hosts (e.g. t2.micro)
+# Build production bundle — disable source maps + cap heap for 1 GB RAM hosts (e.g. t2.micro)
+# GENERATE_SOURCEMAP=false cuts peak webpack memory by ~50% (no .map files generated)
 ENV NODE_OPTIONS=--max_old_space_size=400
+ENV GENERATE_SOURCEMAP=false
 RUN npm run build
 
 # Stage 2: Runtime - serve static files via nginx
