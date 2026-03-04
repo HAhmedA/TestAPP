@@ -1,6 +1,8 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit'
 import axios from 'axios'
 import { API_BASE as apiBaseAddress } from '../api/client'
+import { fetchLlmConfig as apiFetchLlmConfig, saveLlmConfig as apiSaveLlmConfig, testLlmConfig as apiTestLlmConfig } from '../api/llmConfig'
+import type { LlmConfig, LlmTestResult } from '../api/llmConfig'
 
 interface PromptData {
     prompt: string
@@ -15,6 +17,10 @@ interface AdminState {
     alignmentLastUpdated: string | null
     status: 'idle' | 'loading' | 'succeeded' | 'failed'
     error: string | null
+    llmConfig: LlmConfig | null
+    llmConfigStatus: 'idle' | 'loading' | 'succeeded' | 'failed'
+    llmTestResult: LlmTestResult | null
+    llmTestStatus: 'idle' | 'loading' | 'succeeded' | 'failed'
 }
 
 const initialState: AdminState = {
@@ -23,7 +29,11 @@ const initialState: AdminState = {
     systemLastUpdated: null,
     alignmentLastUpdated: null,
     status: 'idle',
-    error: null
+    error: null,
+    llmConfig: null,
+    llmConfigStatus: 'idle',
+    llmTestResult: null,
+    llmTestStatus: 'idle'
 }
 
 // Fetch all prompts (both types)
@@ -52,6 +62,27 @@ export const updateSystemPrompt = createAsyncThunk('admin/updateSystemPrompt', a
     const response = await axios.put(apiBaseAddress + '/admin/prompt', { prompt, type: 'system' })
     return response.data
 })
+
+export const fetchLlmConfig = createAsyncThunk('admin/fetchLlmConfig', async () => {
+    const data = await apiFetchLlmConfig()
+    return data
+})
+
+export const updateLlmConfig = createAsyncThunk(
+    'admin/updateLlmConfig',
+    async (cfg: Partial<LlmConfig>) => {
+        const data = await apiSaveLlmConfig(cfg)
+        return data
+    }
+)
+
+export const testLlmConfigThunk = createAsyncThunk(
+    'admin/testLlmConfig',
+    async (cfg: Partial<LlmConfig>) => {
+        const data = await apiTestLlmConfig(cfg)
+        return data
+    }
+)
 
 const adminSlice = createSlice({
     name: 'admin',
@@ -123,6 +154,32 @@ const adminSlice = createSlice({
                 state.status = 'failed'
                 state.error = action.error.message || 'Failed to update system prompt'
             })
+            // Fetch LLM config
+            .addCase(fetchLlmConfig.pending, (state) => { state.llmConfigStatus = 'loading' })
+            .addCase(fetchLlmConfig.fulfilled, (state, action) => {
+                state.llmConfigStatus = 'succeeded'
+                state.llmConfig = action.payload
+            })
+            .addCase(fetchLlmConfig.rejected, (state) => { state.llmConfigStatus = 'failed' })
+
+            // Update LLM config
+            .addCase(updateLlmConfig.pending, (state) => { state.llmConfigStatus = 'loading' })
+            .addCase(updateLlmConfig.fulfilled, (state, action) => {
+                state.llmConfigStatus = 'succeeded'
+                state.llmConfig = action.payload
+            })
+            .addCase(updateLlmConfig.rejected, (state) => { state.llmConfigStatus = 'failed' })
+
+            // Test LLM config
+            .addCase(testLlmConfigThunk.pending, (state) => {
+                state.llmTestStatus = 'loading'
+                state.llmTestResult = null
+            })
+            .addCase(testLlmConfigThunk.fulfilled, (state, action) => {
+                state.llmTestStatus = 'succeeded'
+                state.llmTestResult = action.payload
+            })
+            .addCase(testLlmConfigThunk.rejected, (state) => { state.llmTestStatus = 'failed' })
     }
 })
 
