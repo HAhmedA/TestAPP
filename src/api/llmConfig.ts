@@ -1,3 +1,4 @@
+// LLM Config API client — admin-only endpoints for reading and updating LLM provider configuration.
 import { api } from './client'
 
 export interface LlmConfig {
