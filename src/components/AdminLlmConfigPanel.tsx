@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import type { AppDispatch, RootState } from '../redux/index'
-import { fetchLlmConfig, updateLlmConfig, testLlmConfig } from '../redux/admin'
+import { fetchLlmConfig, updateLlmConfig, testLlmConfig, resetLlmTestResult } from '../redux/admin'
 import type { LlmConfig } from '../api/llmConfig'
 
 const PROVIDERS = ['lmstudio', 'openai', 'groq', 'other']
@@ -37,6 +37,7 @@ const AdminLlmConfigPanel: React.FC = () => {
     const handleSave = async () => {
         setSaveMsg(null)
         setSaveFailed(false)
+        dispatch(resetLlmTestResult())
         const result = await dispatch(updateLlmConfig(form))
         if (updateLlmConfig.fulfilled.match(result)) {
             setSaveMsg('Configuration saved.')
@@ -102,17 +103,16 @@ const AdminLlmConfigPanel: React.FC = () => {
                             onChange={e => set('baseUrl', e.target.value)} />
                     </div>
 
-                    <div style={rowStyle}>
-                        <div>
-                            <label style={labelStyle}>Main Model</label>
-                            <input style={inputStyle} value={form.mainModel || ''}
-                                onChange={e => set('mainModel', e.target.value)} />
-                        </div>
-                        <div>
-                            <label style={labelStyle}>Judge Model</label>
-                            <input style={inputStyle} value={form.judgeModel || ''}
-                                onChange={e => set('judgeModel', e.target.value)} />
-                        </div>
+                    <div>
+                        <label style={labelStyle}>Main Model</label>
+                        <input style={inputStyle} value={form.mainModel || ''}
+                            onChange={e => set('mainModel', e.target.value)} />
+                    </div>
+
+                    <div>
+                        <label style={labelStyle}>Judge Model</label>
+                        <input style={inputStyle} value={form.judgeModel || ''}
+                            onChange={e => set('judgeModel', e.target.value)} />
                     </div>
 
                     <div>

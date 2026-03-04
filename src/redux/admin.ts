@@ -67,31 +67,52 @@ export const updateSystemPrompt = createAsyncThunk('admin/updateSystemPrompt', a
     return response.data
 })
 
-export const fetchLlmConfig = createAsyncThunk('admin/fetchLlmConfig', async () => {
-    const data = await apiFetchLlmConfig()
-    return data
-})
+export const fetchLlmConfig = createAsyncThunk(
+    'admin/fetchLlmConfig',
+    async (_arg, { rejectWithValue }) => {
+        try {
+            return await apiFetchLlmConfig()
+        } catch (err: any) {
+            const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to load LLM config.'
+            return rejectWithValue(msg)
+        }
+    }
+)
 
 export const updateLlmConfig = createAsyncThunk(
     'admin/updateLlmConfig',
-    async (cfg: Partial<LlmConfig>) => {
-        const data = await apiSaveLlmConfig(cfg)
-        return data
+    async (cfg: Partial<LlmConfig>, { rejectWithValue }) => {
+        try {
+            return await apiSaveLlmConfig(cfg)
+        } catch (err: any) {
+            const msg = err?.response?.data?.message ?? err?.message ?? 'Save failed.'
+            return rejectWithValue(msg)
+        }
     }
 )
 
 export const testLlmConfig = createAsyncThunk(
     'admin/testLlmConfig',
-    async (cfg: Partial<LlmConfig>) => {
-        const data = await apiTestLlmConfig(cfg)
-        return data
+    async (cfg: Partial<LlmConfig>, { rejectWithValue }) => {
+        try {
+            return await apiTestLlmConfig(cfg)
+        } catch (err: any) {
+            const msg = err?.response?.data?.message ?? err?.message ?? 'Connection test failed.'
+            return rejectWithValue(msg)
+        }
     }
 )
 
 const adminSlice = createSlice({
     name: 'admin',
     initialState,
-    reducers: {},
+    reducers: {
+        resetLlmTestResult: (state) => {
+            state.llmTestResult = null
+            state.llmTestStatus = 'idle'
+            state.llmTestError = null
+        }
+    },
     extraReducers: (builder) => {
         builder
             // Fetch all prompts
@@ -169,7 +190,7 @@ const adminSlice = createSlice({
             })
             .addCase(fetchLlmConfig.rejected, (state, action) => {
                 state.llmConfigStatus = 'failed'
-                state.llmConfigError = action.error.message ?? 'Failed to load LLM config'
+                state.llmConfigError = (action.payload as string) ?? action.error.message ?? 'Failed to load LLM config'
             })
 
             // Update LLM config
@@ -183,7 +204,7 @@ const adminSlice = createSlice({
             })
             .addCase(updateLlmConfig.rejected, (state, action) => {
                 state.llmConfigStatus = 'failed'
-                state.llmConfigError = action.error.message ?? 'Failed to save LLM config'
+                state.llmConfigError = (action.payload as string) ?? action.error.message ?? 'Failed to save LLM config'
             })
 
             // Test LLM config
@@ -198,10 +219,12 @@ const adminSlice = createSlice({
             })
             .addCase(testLlmConfig.rejected, (state, action) => {
                 state.llmTestStatus = 'failed'
-                state.llmTestError = action.error.message ?? 'Connection test failed'
+                state.llmTestError = (action.payload as string) ?? action.error.message ?? 'Connection test failed'
             })
     }
 })
+
+export const { resetLlmTestResult } = adminSlice.actions
 
 export default adminSlice.reducer
 
