@@ -126,9 +126,14 @@ async function checkAvailability() {
 
         logger.info(`Checking LLM availability at ${config.baseUrl}/v1/models`)
 
+        const headers = { 'Content-Type': 'application/json' }
+        if (config.apiKey && config.provider !== 'lmstudio') {
+            headers['Authorization'] = `Bearer ${config.apiKey}`
+        }
+
         const response = await fetch(`${config.baseUrl}/v1/models`, {
             method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             signal: controller.signal
         })
 
