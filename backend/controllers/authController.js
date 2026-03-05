@@ -1,9 +1,33 @@
 // Auth controller
 import bcrypt from 'bcrypt'
+import { createHmac } from 'crypto'
 import pool from '../config/database.js'
 import logger from '../utils/logger.js'
 import { generateStudentData } from '../services/simulationOrchestratorService.js'
 import { asyncRoute, AppError } from '../utils/errors.js'
+
+// Produce the signed session cookie value that express-session expects.
+// Uses the same algorithm as the 'cookie-signature' package (HMAC-SHA256, base64url).
+function signSessionId(id, secret) {
+    const sig = createHmac('sha256', secret).update(id).digest('base64')
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    return 's:' + id + '.' + sig
+}
+
+// Set the connect.sid cookie explicitly — express-session's res.end() hook
+// does not fire reliably in production behind nginx, so we set it manually
+// after session.save() guarantees the row is in PostgreSQL.
+function setSessionCookie(res, sessionId) {
+    const value = signSessionId(sessionId, process.env.SESSION_SECRET)
+    const secure = process.env.COOKIE_SECURE === 'true'
+    res.cookie('connect.sid', value, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure,
+        maxAge: 24 * 60 * 60 * 1000,
+        path: '/',
+    })
+}
 
 export const login = asyncRoute(async (req, res) => {
         const { email, password } = req.body
@@ -19,6 +43,7 @@ export const login = asyncRoute(async (req, res) => {
         await new Promise((resolve, reject) =>
             req.session.save(err => (err ? reject(err) : resolve()))
         )
+        setSessionCookie(res, req.sessionID)
         logger.info(`User logged in: ${email}`)
         res.json(user)
 })
@@ -54,6 +79,7 @@ export const register = asyncRoute(async (req, res) => {
         await new Promise((resolve, reject) =>
             req.session.save(err => (err ? reject(err) : resolve()))
         )
+        setSessionCookie(res, req.sessionID)
         logger.info(`User registered: ${email}`)
 
         // Generate simulated data via Orchestrator (dev/test only).
