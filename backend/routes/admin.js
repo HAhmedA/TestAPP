@@ -326,7 +326,9 @@ router.post('/recompute-scores', asyncRoute(async (req, res) => {
     let errors = 0
     for (const { user_id } of rows) {
         try {
-            await computeAllScores(user_id)
+            // Pass null as lmsDays to use all-time window — essential after CSV imports
+            // where data is typically older than the default 7-day rolling window.
+            await computeAllScores(user_id, null)
             recomputed++
         } catch (err) {
             logger.error(`recompute-scores: failed for user ${user_id}: ${err.message}`)
