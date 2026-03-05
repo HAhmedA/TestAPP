@@ -79,7 +79,7 @@ async function chatCompletion(messages, options = {}) {
             logger.error(`LLM request timed out after ${config.timeoutMs}ms`)
             throw new Error('LLM_TIMEOUT')
         }
-        logger.error('LLM API error:', error.message)
+        logger.error(`LLM API error: ${error.message}`)
         throw error
     }
 }
@@ -126,9 +126,14 @@ async function checkAvailability() {
 
         logger.info(`Checking LLM availability at ${config.baseUrl}/models`)
 
+        const availHeaders = { 'Content-Type': 'application/json' }
+        if (config.apiKey && config.provider !== 'lmstudio') {
+            availHeaders['Authorization'] = `Bearer ${config.apiKey}`
+        }
+
         const response = await fetch(`${config.baseUrl}/models`, {
             method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
+            headers: availHeaders,
             signal: controller.signal
         })
 

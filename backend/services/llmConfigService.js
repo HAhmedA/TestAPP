@@ -25,6 +25,12 @@ export function _resetCacheForTesting() {
     _cacheExpiry = 0
 }
 
+/** Call after saving new config so the next request reads from DB immediately. */
+export function clearLlmConfigCache() {
+    _cache = null
+    _cacheExpiry = 0
+}
+
 export async function getLlmConfig() {
     if (_cache && Date.now() < _cacheExpiry) return _cache
 

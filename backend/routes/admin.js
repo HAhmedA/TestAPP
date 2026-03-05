@@ -8,7 +8,7 @@ import { getAnnotations } from '../services/annotators/srlAnnotationService.js'
 import { asyncRoute, Errors } from '../utils/errors.js'
 import { CONCEPT_NAMES, CONCEPT_IDS } from '../config/concepts.js'
 import { getConceptPoolSizes, getUserConceptDataSet } from '../services/scoring/scoreQueryService.js'
-import { getLlmConfig } from '../services/llmConfigService.js'
+import { getLlmConfig, clearLlmConfigCache } from '../services/llmConfigService.js'
 import { computeAllScores } from '../services/scoring/scoreComputationService.js'
 
 const router = Router()
@@ -385,13 +385,19 @@ router.put('/llm-config', asyncRoute(async (req, res) => {
         resolvedApiKey = current.apiKey
     }
 
+    // Trim trailing slashes to prevent double-slash URLs like .../openai//models
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '')
+
     const { rows } = await pool.query(
         `INSERT INTO public.llm_config
             (provider, base_url, main_model, judge_model, max_tokens, temperature, timeout_ms, api_key, updated_by, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
          RETURNING provider, base_url, main_model, judge_model, max_tokens, temperature, timeout_ms, updated_at`,
-        [provider, baseUrl, mainModel, judgeModel, maxTokens, temperature, timeoutMs, resolvedApiKey, userId]
+        [provider, cleanBaseUrl, mainModel, judgeModel, maxTokens, temperature, timeoutMs, resolvedApiKey, userId]
     )
+
+    // Bust the in-process cache so the next request reads the new config immediately
+    clearLlmConfigCache()
 
     const row = rows[0]
     logger.info(`LLM config updated by admin ${userId}: provider=${provider}`)
@@ -419,8 +425,8 @@ router.post('/llm-config/test', asyncRoute(async (req, res) => {
         apiKey = current.apiKey
     }
 
-    // Validate baseUrl to prevent SSRF
-    const resolvedBaseUrl = baseUrl
+    // Validate baseUrl to prevent SSRF; trim trailing slashes to avoid //models
+    const resolvedBaseUrl = baseUrl.replace(/\/+$/, '')
     try {
         new URL(resolvedBaseUrl)
     } catch {
