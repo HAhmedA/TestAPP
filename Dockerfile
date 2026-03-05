@@ -22,7 +22,7 @@ ENV PUBLIC_URL=${PUBLIC_URL}
 
 # Build production bundle — disable source maps + cap heap for 1 GB RAM hosts (e.g. t2.micro)
 # GENERATE_SOURCEMAP=false cuts peak webpack memory by ~50% (no .map files generated)
-ENV NODE_OPTIONS=--max_old_space_size=400
+ENV NODE_OPTIONS=--max_old_space_size=700
 ENV GENERATE_SOURCEMAP=false
 RUN npm run build
 
