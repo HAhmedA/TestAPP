@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import type { AppDispatch, RootState } from '../redux/index'
 import { fetchLlmConfig, updateLlmConfig, testLlmConfig, resetLlmTestResult } from '../redux/admin'
 import type { LlmConfig } from '../api/llmConfig'
+import { api } from '../api/client'
 
 const PROVIDERS = ['lmstudio', 'openai', 'groq', 'other']
 
@@ -58,9 +59,8 @@ const AdminLlmConfigPanel: React.FC = () => {
         if (!showKey && !keyRevealed) {
             // First "Show" click — fetch the real key from the backend
             try {
-                const { api } = await import('../api/client')
                 const data = await api.get<{ apiKey: string }>('/admin/llm-config/reveal-key')
-                set('apiKey', data.apiKey)
+                set('apiKey', data.apiKey || '')
                 setKeyRevealed(true)
             } catch {
                 // If reveal fails, just toggle visibility without replacing value
@@ -142,13 +142,19 @@ const AdminLlmConfigPanel: React.FC = () => {
                             <input style={{ ...inputStyle, flex: 1 }}
                                 type={showKey ? 'text' : 'password'}
                                 value={form.apiKey || ''}
-                                onChange={e => set('apiKey', e.target.value)} />
+                                placeholder="Enter API key…"
+                                onChange={e => { set('apiKey', e.target.value); setKeyRevealed(true) }} />
                             <button style={{ ...btnStyle('#333'), padding: '6px 12px' }}
                                 aria-label={showKey ? 'Hide API key' : 'Show API key'}
                                 onClick={handleToggleShowKey}>
                                 {showKey ? 'Hide' : 'Show'}
                             </button>
                         </div>
+                        {showKey && keyRevealed && !form.apiKey && (
+                            <span style={{ fontSize: 11, color: '#ef5350', marginTop: 4, display: 'block' }}>
+                                No key stored — paste your API key above and save.
+                            </span>
+                        )}
                     </div>
 
                     <div style={rowStyle}>
