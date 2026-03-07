@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Install dependencies first to leverage Docker layer cache
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund --legacy-peer-deps
 
 # Copy source
 COPY . .
