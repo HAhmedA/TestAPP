@@ -26,6 +26,8 @@ ENV PUBLIC_URL=${PUBLIC_URL}
 # GENERATE_SOURCEMAP=false cuts peak webpack memory by ~50% (no .map files generated)
 ENV NODE_OPTIONS=--max_old_space_size=700
 ENV GENERATE_SOURCEMAP=false
+# Verify TypeScript config exists so CRA enables the TS webpack loader
+RUN ls tsconfig.json && node -e "require('fs').existsSync('/app/tsconfig.json') ? console.log('tsconfig OK') : process.exit(1)"
 RUN npm run build
 
 # Stage 2: Runtime - serve static files via nginx
