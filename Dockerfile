@@ -6,7 +6,9 @@ FROM node:18-alpine AS build
 WORKDIR /app
 
 # Install dependencies first to leverage Docker layer cache
-COPY package.json package-lock.json ./
+# Note: package-lock.json is intentionally excluded — the rebase-merged lockfile
+# from two repos can have missing babel TypeScript preset entries that break the build.
+COPY package.json ./
 RUN npm install --no-audit --no-fund
 
 # Copy source
