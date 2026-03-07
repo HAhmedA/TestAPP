@@ -598,6 +598,167 @@
     margin-bottom: 12px;
 }
 
+/* ── Gear Settings Button ─────────────────────────── */
+.chatbot-gear-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    color: white;
+    font-size: 16px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+    margin-left: 4px;
+}
+
+.chatbot-gear-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.chatbot-gear-btn.active {
+    background: rgba(255, 255, 255, 0.35);
+}
+
+/* ── Settings Panel ───────────────────────────────── */
+.chatbot-settings-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    background: #fff;
+}
+
+.chatbot-settings-back {
+    background: none;
+    border: none;
+    color: #0891B2;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    font-weight: 500;
+}
+
+.chatbot-settings-back:hover {
+    text-decoration: underline;
+}
+
+.chatbot-settings-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1F2937;
+}
+
+.chatbot-settings-saving {
+    margin: 0;
+    font-size: 12px;
+    color: #6B7280;
+    animation: fadeIn 0.2s ease;
+}
+
+.chatbot-settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.chatbot-settings-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.chatbot-settings-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chatbot-settings-option {
+    padding: 6px 14px;
+    border: 1.5px solid #D1D5DB;
+    border-radius: 20px;
+    background: white;
+    color: #374151;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.chatbot-settings-option:hover {
+    border-color: #0891B2;
+    color: #0891B2;
+}
+
+.chatbot-settings-option.selected {
+    background: #0891B2;
+    border-color: #0891B2;
+    color: white;
+    font-weight: 600;
+}
+
+/* ── Data Update Banner ───────────────────────────── */
+.chatbot-data-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #FEF3C7;
+    border: 1px solid #F59E0B;
+    border-radius: 8px;
+    margin: 8px 8px 4px;
+    font-size: 13px;
+    color: #92400E;
+    flex-wrap: wrap;
+}
+
+.chatbot-data-banner span {
+    flex: 1;
+    min-width: 0;
+}
+
+.chatbot-data-banner-refresh {
+    background: #F59E0B;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease;
+}
+
+.chatbot-data-banner-refresh:hover {
+    background: #D97706;
+}
+
+.chatbot-data-banner-dismiss {
+    background: none;
+    border: none;
+    color: #92400E;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 4px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}
+
+.chatbot-data-banner-dismiss:hover {
+    opacity: 1;
+}
+
 /* Reset Loading State */
 .chatbot-reset-loading {
     display: flex;

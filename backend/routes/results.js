@@ -6,6 +6,7 @@ import logger from '../utils/logger.js'
 import { saveResponses, computeAnnotations } from '../services/annotators/srlAnnotationService.js'
 import { computeAllScores } from '../services/scoring/scoreComputationService.js'
 import { asyncRoute } from '../utils/errors.js'
+import { updateDataVersion } from '../services/chatbotPreferencesService.js'
 
 const router = Router()
 
@@ -47,6 +48,7 @@ router.post('/post', asyncRoute(async (req, res) => {
         computeAllScores(userId).catch(err =>
             logger.error('Score recomputation error after SRL submit:', err)
         )
+        updateDataVersion(userId).catch(err => logger.warn('data version update failed:', err.message))
     }
 
     logger.info(`Survey response submitted for ${postId}`)

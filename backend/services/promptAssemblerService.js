@@ -14,6 +14,7 @@ import { getAnnotationsForChatbot } from './annotators/srlAnnotationService.js'
 import { getJudgmentsForChatbot as getSleepAnnotations } from './annotators/sleepAnnotationService.js'
 import { getJudgmentsForChatbot as getScreenTimeAnnotations } from './annotators/screenTimeAnnotationService.js'
 import { getJudgmentsForChatbot as getLMSAnnotations } from './annotators/lmsAnnotationService.js'
+import { getPreferences } from './chatbotPreferencesService.js'
 
 // Get directory path for ES modules
 const __filename = fileURLToPath(import.meta.url)
@@ -174,10 +175,72 @@ async function getSessionMessages(sessionId, limit = MAX_SESSION_MESSAGES) {
     return rows.reverse()
 }
 
+// =============================================================================
+// PERSONA + DATA AVAILABILITY HELPERS
+// =============================================================================
+
+/**
+ * Builds the RESPONSE STYLE PREFERENCES block from stored persona settings.
+ * Medium length and mixed style have no special instruction (they are the default).
+ */
+function formatPersonaSection(prefs) {
+    if (!prefs) return ''
+
+    const lines = []
+
+    if (prefs.response_length === 'short') {
+        lines.push('Response length: short. Be concise — keep replies to 2-4 sentences where possible.')
+    } else if (prefs.response_length === 'long') {
+        lines.push('Response length: long. Provide thorough explanations with context and detail.')
+    }
+
+    if (prefs.tone === 'formal') {
+        lines.push('Tone: formal. Use professional, structured language.')
+    } else if (prefs.tone === 'motivational') {
+        lines.push('Tone: motivational. Be encouraging, energetic, and empowering.')
+    } else if (prefs.tone === 'neutral') {
+        lines.push('Tone: neutral. Be objective and matter-of-fact.')
+    }
+
+    if (prefs.answer_style === 'bullets') {
+        lines.push('Format: bullets. Structure all responses with bullet points and numbered lists.')
+    } else if (prefs.answer_style === 'prose') {
+        lines.push('Format: prose. Write in flowing paragraphs — avoid bullet points.')
+    } else if (prefs.answer_style === 'mixed') {
+        lines.push('Format: mixed. Use a combination of brief paragraphs and bullet lists.')
+    }
+
+    if (lines.length === 0) return ''
+    return lines.join('\n') + '\nApply these style preferences to all responses exactly as specified.'
+}
+
+/**
+ * Builds the DATA AVAILABILITY block so the LLM knows which dimensions have data.
+ * Checks whether each annotation string contains actual content vs. a placeholder.
+ */
+function formatDataAvailability(srlAnnotations, sleepAnnotations, screenTimeAnnotations, lmsAnnotations) {
+    const isAvailable = (text) => text && text.trim().length > 0 &&
+        !text.includes('No data') && !text.includes('no data') &&
+        !text.includes('not yet') && !text.includes('not available')
+
+    const srlStatus = isAvailable(srlAnnotations) ? 'Available' : 'Not yet submitted by student'
+    const sleepStatus = isAvailable(sleepAnnotations) ? 'Available' : 'Not yet logged by student'
+    const screenStatus = isAvailable(screenTimeAnnotations) ? 'Available' : 'Not yet logged by student'
+    const lmsStatus = isAvailable(lmsAnnotations) ? 'Available' : 'Not yet synced from LMS'
+
+    return [
+        `- SRL (Self-Regulated Learning): ${srlStatus}`,
+        `- Sleep: ${sleepStatus}`,
+        `- Screen Time: ${screenStatus}`,
+        `- LMS Activity: ${lmsStatus}`,
+        'If a dimension shows "Not yet", do NOT fabricate values for it. Acknowledge the gap and invite the student to provide data.'
+    ].join('\n')
+}
+
 /**
  * Assemble the complete prompt for the LLM
  * This is the main function that combines all data sources
- * 
+ *
  * @param {string} userId - User ID
  * @param {string} sessionId - Current session ID
  * @param {string} userMessage - Current user message (optional, for new messages)
@@ -188,7 +251,8 @@ async function assemblePrompt(userId, sessionId, userMessage = null) {
 
     // Gather all data sources in parallel
     const [systemPrompt, userContext, conceptScores, summaries,
-           srlAnnotations, sleepAnnotations, screenTimeAnnotations, lmsAnnotations] = await Promise.all([
+           srlAnnotations, sleepAnnotations, screenTimeAnnotations, lmsAnnotations,
+           prefs] = await Promise.all([
         getSystemPrompt(),
         getUserContext(userId),
         getScoresForChatbot(userId),
@@ -196,7 +260,8 @@ async function assemblePrompt(userId, sessionId, userMessage = null) {
         getAnnotationsForChatbot(pool, userId),
         getSleepAnnotations(pool, userId),
         getScreenTimeAnnotations(pool, userId),
-        getLMSAnnotations(pool, userId)
+        getLMSAnnotations(pool, userId),
+        getPreferences(userId)
     ])
 
     // Log what data we have
@@ -226,9 +291,14 @@ async function assemblePrompt(userId, sessionId, userMessage = null) {
     let assembledContext = baseSystemPrompt
 
     // 2. Context Sections (Prioritized: User Context > Scores+Annotations > Summaries)
+    const personaSection = formatPersonaSection(prefs)
+    const dataAvailSection = formatDataAvailability(srlAnnotations, sleepAnnotations, screenTimeAnnotations, lmsAnnotations)
+
     const contextSections = [
         { name: 'USER CONTEXT & PREFERENCES', content: userContext, priority: 1 },
         { name: 'CURRENT SESSION', content: userType, priority: 1 },
+        ...(personaSection ? [{ name: 'RESPONSE STYLE PREFERENCES', content: personaSection, priority: 1 }] : []),
+        { name: 'DATA AVAILABILITY', content: dataAvailSection, priority: 2 },
         { name: 'STUDENT DATA SUMMARY (scores)', content: conceptScores, priority: 2 },
         { name: 'ANNOTATED QUESTIONNAIRE INSIGHTS (SRL Data)', content: srlAnnotations, priority: 2 },
         { name: 'SLEEP ANALYSIS', content: sleepAnnotations, priority: 2 },
@@ -326,7 +396,8 @@ async function assembleInitialGreetingPrompt(userId) {
     logger.prompt(`Assembling initial greeting prompt`, { userId })
 
     const [systemPrompt, userContext, conceptScores, summaries,
-           srlAnnotations, sleepAnnotations, screenTimeAnnotations, lmsAnnotations] = await Promise.all([
+           srlAnnotations, sleepAnnotations, screenTimeAnnotations, lmsAnnotations,
+           prefs] = await Promise.all([
         getSystemPrompt(),
         getUserContext(userId),
         getScoresForChatbot(userId),
@@ -334,7 +405,8 @@ async function assembleInitialGreetingPrompt(userId) {
         getAnnotationsForChatbot(pool, userId),
         getSleepAnnotations(pool, userId),
         getScreenTimeAnnotations(pool, userId),
-        getLMSAnnotations(pool, userId)
+        getLMSAnnotations(pool, userId),
+        getPreferences(userId)
     ])
 
     const userHasHistory = await hasHistory(userId)
@@ -351,6 +423,9 @@ async function assembleInitialGreetingPrompt(userId) {
         summariesLength: summaries.length
     })
 
+    const personaSection = formatPersonaSection(prefs)
+    const dataAvailSection = formatDataAvailability(srlAnnotations, sleepAnnotations, screenTimeAnnotations, lmsAnnotations)
+
     // Note: Greeting behavior is defined in system_prompt.txt under Greeting Rules
     const assembledSystem = `${systemPrompt}
 
@@ -358,6 +433,12 @@ async function assembleInitialGreetingPrompt(userId) {
 
 USER CONTEXT & PREFERENCES:
 ${userContext}
+
+CURRENT SESSION:
+This is a ${userType}. Generate a personalized greeting following the Greeting Rules.
+${personaSection ? `\nRESPONSE STYLE PREFERENCES:\n${personaSection}\n` : ''}
+DATA AVAILABILITY:
+${dataAvailSection}
 
 STUDENT DATA SUMMARY (scores):
 ${conceptScores}
@@ -376,9 +457,6 @@ ${lmsAnnotations}
 
 PREVIOUS CHATS (SUMMARIZED):
 ${summaries}
-
-CURRENT SESSION:
-This is a ${userType}. Generate a personalized greeting following the Greeting Rules.
 `
 
     const messages = [

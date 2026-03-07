@@ -19,6 +19,7 @@ import { Errors } from '../utils/errors.js'
 import { withTransaction } from '../utils/withTransaction.js'
 import { computeAllScores } from './scoring/index.js'
 import { computeJudgments } from './annotators/lmsAnnotationService.js'
+import { updateDataVersion } from './chatbotPreferencesService.js'
 import pLimit from 'p-limit'
 
 const MAX_FORUM_DISCUSSIONS_PER_SYNC = 50
@@ -503,10 +504,11 @@ async function syncUserFromMoodle(pool, userId, userEmail) {
         )
     })
 
-    // 7. Fire-and-forget score computation (non-blocking)
+    // 7. Fire-and-forget score computation + data version bump (non-blocking)
     computeAllScores(userId).catch(err =>
         logger.error(`computeAllScores error for ${userId}: ${err.message}`)
     )
+    await updateDataVersion(userId)
 
     // 8. Return sync summary
     return {

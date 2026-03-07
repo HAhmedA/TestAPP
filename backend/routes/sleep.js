@@ -5,6 +5,7 @@ import logger from '../utils/logger.js'
 import { requireAuth } from '../middleware/auth.js'
 import { computeAllScores } from '../services/scoring/scoreComputationService.js'
 import { asyncRoute, Errors } from '../utils/errors.js'
+import { updateDataVersion } from '../services/chatbotPreferencesService.js'
 
 const router = Router()
 
@@ -130,6 +131,7 @@ router.post('/', asyncRoute(async (req, res) => {
 
         // Trigger score recomputation in background (do not await)
         computeAllScores(userId).catch(err => logger.error('Score recomputation error after sleep submit:', err))
+        updateDataVersion(userId).catch(err => logger.warn('data version update failed:', err.message))
 
         return res.json({ entry: upsertResult.rows[0] })
 }))

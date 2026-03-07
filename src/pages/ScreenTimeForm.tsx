@@ -91,6 +91,7 @@ const ScreenTimeForm = () => {
             setSavedEntry(entry)
             setEditMode(false)
             setSubmitMsg({ text: 'Screen time logged!', type: 'success' })
+            window.dispatchEvent(new CustomEvent('chatbot:dataUpdated', { detail: { dataType: 'screen time' } }))
         } catch {
             setSubmitMsg({ text: 'Network error', type: 'error' })
         } finally {

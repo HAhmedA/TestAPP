@@ -50,3 +50,15 @@ export const resetChat = () =>
 
 export const getChatStatus = () =>
     api.get<{ available: boolean; models: string[] }>('/chat/status')
+
+export interface ChatbotPreferences {
+    response_length: 'short' | 'medium' | 'long'
+    tone: 'friendly' | 'formal' | 'motivational' | 'neutral'
+    answer_style: 'bullets' | 'prose' | 'mixed'
+}
+
+export const getChatPreferences = () =>
+    api.get<ChatbotPreferences>('/chat/preferences')
+
+export const updateChatPreferences = (prefs: Partial<ChatbotPreferences>) =>
+    api.put<ChatbotPreferences>('/chat/preferences', prefs)

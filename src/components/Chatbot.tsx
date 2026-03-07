@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './Chatbot.css'
-import { getInitialChat, getHistory, sendMessage as sendMessageApi, resetChat, getChatStatus } from '../api/chat'
+import { getInitialChat, getHistory, sendMessage as sendMessageApi, resetChat, getChatStatus, getChatPreferences, updateChatPreferences, ChatbotPreferences } from '../api/chat'
 
 interface Message {
     id: string
@@ -49,6 +49,14 @@ const Chatbot = ({ isLoggedIn }: ChatbotProps) => {
 
     // "Need help?" pill — shown briefly on login
     const [showHiPill, setShowHiPill] = useState(false)
+
+    // Settings panel + persona preferences
+    const [activeView, setActiveView] = useState<'messages' | 'settings'>('messages')
+    const [preferences, setPreferences] = useState<ChatbotPreferences | null>(null)
+    const [isSavingPrefs, setIsSavingPrefs] = useState(false)
+
+    // Proactive data-update banner
+    const [dataUpdateBanner, setDataUpdateBanner] = useState<{ dataType: string } | null>(null)
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -123,6 +131,24 @@ const Chatbot = ({ isLoggedIn }: ChatbotProps) => {
         if (isOpen) {
             setHasUnread(false)
         }
+    }, [isOpen])
+
+    // Load preferences once when chat opens for the first time
+    useEffect(() => {
+        if (isOpen && isLoggedIn && !preferences) {
+            getChatPreferences().then(setPreferences).catch(console.error)
+        }
+    }, [isOpen, isLoggedIn, preferences])
+
+    // Listen for data-submission events from other pages/components
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const detail = (e as CustomEvent).detail as { dataType: string }
+            setDataUpdateBanner({ dataType: detail.dataType })
+            if (!isOpen) setHasUnread(true)
+        }
+        window.addEventListener('chatbot:dataUpdated', handler)
+        return () => window.removeEventListener('chatbot:dataUpdated', handler)
     }, [isOpen])
 
     // Scroll to bottom when messages change or when chat opens
@@ -383,6 +409,27 @@ const Chatbot = ({ isLoggedIn }: ChatbotProps) => {
         }
     }
 
+    const handleRefreshSummary = () => {
+        const dataType = dataUpdateBanner?.dataType ?? 'latest'
+        setDataUpdateBanner(null)
+        setActiveView('messages')
+        setInputValue(`Please give me an updated summary based on my latest ${dataType} data`)
+        setTimeout(sendMessage, 50)
+    }
+
+    const handlePreferenceChange = async (key: keyof ChatbotPreferences, value: string) => {
+        setPreferences(prev => prev ? { ...prev, [key]: value } : null)
+        setIsSavingPrefs(true)
+        try {
+            const updated = await updateChatPreferences({ [key]: value })
+            setPreferences(updated)
+        } catch (err) {
+            console.error('Failed to save preference:', err)
+        } finally {
+            setIsSavingPrefs(false)
+        }
+    }
+
     const toggleChat = () => {
         setIsOpen(!isOpen)
     }
@@ -457,13 +504,95 @@ const Chatbot = ({ isLoggedIn }: ChatbotProps) => {
                             </svg>
                             <span>New Chat</span>
                         </button>
+                        <button
+                            className={`chatbot-gear-btn${activeView === 'settings' ? ' active' : ''}`}
+                            onClick={() => setActiveView(v => v === 'settings' ? 'messages' : 'settings')}
+                            title="Chatbot settings"
+                            aria-label="Chatbot settings"
+                        >
+                            ⚙
+                        </button>
                     </div>
 
+                    {activeView === 'settings' ? (
+                        <div className="chatbot-settings-panel">
+                            <button
+                                className="chatbot-settings-back"
+                                onClick={() => setActiveView('messages')}
+                            >
+                                ← Back to chat
+                            </button>
+                            <h4 className="chatbot-settings-title">Assistant Settings</h4>
+                            {isSavingPrefs && <p className="chatbot-settings-saving">Saving…</p>}
+
+                            <div className="chatbot-settings-group">
+                                <label className="chatbot-settings-label">Response Length</label>
+                                <div className="chatbot-settings-options">
+                                    {(['short', 'medium', 'long'] as const).map(opt => (
+                                        <button
+                                            key={opt}
+                                            className={`chatbot-settings-option${preferences?.response_length === opt ? ' selected' : ''}`}
+                                            onClick={() => handlePreferenceChange('response_length', opt)}
+                                        >
+                                            {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="chatbot-settings-group">
+                                <label className="chatbot-settings-label">Tone</label>
+                                <div className="chatbot-settings-options">
+                                    {(['friendly', 'formal', 'motivational', 'neutral'] as const).map(opt => (
+                                        <button
+                                            key={opt}
+                                            className={`chatbot-settings-option${preferences?.tone === opt ? ' selected' : ''}`}
+                                            onClick={() => handlePreferenceChange('tone', opt)}
+                                        >
+                                            {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="chatbot-settings-group">
+                                <label className="chatbot-settings-label">Answer Style</label>
+                                <div className="chatbot-settings-options">
+                                    {(['bullets', 'prose', 'mixed'] as const).map(opt => (
+                                        <button
+                                            key={opt}
+                                            className={`chatbot-settings-option${preferences?.answer_style === opt ? ' selected' : ''}`}
+                                            onClick={() => handlePreferenceChange('answer_style', opt)}
+                                        >
+                                            {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
                     <div
                         className="chatbot-messages"
                         ref={messagesContainerRef}
                         onScroll={handleScroll}
                     >
+                        {/* Data update banner */}
+                        {dataUpdateBanner && (
+                            <div className="chatbot-data-banner">
+                                <span>Your {dataUpdateBanner.dataType} data was just updated.</span>
+                                <button className="chatbot-data-banner-refresh" onClick={handleRefreshSummary}>
+                                    Refresh my summary
+                                </button>
+                                <button
+                                    className="chatbot-data-banner-dismiss"
+                                    onClick={() => setDataUpdateBanner(null)}
+                                    aria-label="Dismiss"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+
                         {/* Initial loading spinner */}
                         {messages.length === 0 && (isPrefetching || isLoading) && !isResetting && (
                             <div className="chatbot-initial-loading">
@@ -541,6 +670,7 @@ const Chatbot = ({ isLoggedIn }: ChatbotProps) => {
 
                         <div ref={messagesEndRef} />
                     </div>
+                    )}
 
                     <div className="chatbot-input-container">
                         <input

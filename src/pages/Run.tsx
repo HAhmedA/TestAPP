@@ -40,6 +40,7 @@ const Run = () => {
 
             model.onComplete.add(async (sender: Model) => {
                 await dispatch(post({postId: id as string, surveyResult: sender.data, surveyResultText: JSON.stringify(sender.data)}))
+                window.dispatchEvent(new CustomEvent('chatbot:dataUpdated', { detail: { dataType: 'SRL questionnaire' } }))
                 navigate('/')
             })
             

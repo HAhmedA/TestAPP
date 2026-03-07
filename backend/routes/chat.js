@@ -12,6 +12,7 @@ import {
     resetSession
 } from '../services/contextManagerService.js'
 import { checkAvailability } from '../services/apiConnectorService.js'
+import { getPreferences, upsertPreferences } from '../services/chatbotPreferencesService.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -102,6 +103,33 @@ router.post('/reset', asyncRoute(async (req, res) => {
 router.get('/status', asyncRoute(async (req, res) => {
     const result = await checkAvailability()
     res.json({ available: result.available, models: result.models })
+}))
+
+// Persona / style preferences
+router.get('/preferences', asyncRoute(async (req, res) => {
+    const userId = req.session.user.id
+    const prefs = await getPreferences(userId)
+    res.json(prefs)
+}))
+
+router.put('/preferences', asyncRoute(async (req, res) => {
+    const userId = req.session.user.id
+    const { response_length, tone, answer_style } = req.body
+
+    // Must supply at least one valid key
+    if (response_length === undefined && tone === undefined && answer_style === undefined) {
+        return res.status(400).json({ error: 'At least one preference field is required' })
+    }
+
+    try {
+        const updated = await upsertPreferences(userId, { response_length, tone, answer_style })
+        res.json(updated)
+    } catch (err) {
+        if (err.message.startsWith('Invalid ')) {
+            return res.status(400).json({ error: err.message })
+        }
+        throw err
+    }
 }))
 
 export default router

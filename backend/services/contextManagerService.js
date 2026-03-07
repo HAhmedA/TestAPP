@@ -9,6 +9,7 @@ import { assemblePrompt, assembleInitialGreetingPrompt, getSystemInstructionsFor
 import { getAlignedResponse, quickValidation, SERVICE_UNAVAILABLE_MESSAGE, ALIGNMENT_FAILED_MESSAGE } from './alignmentService.js'
 import { invalidateSummary } from './summarizationService.js'
 import { hasSRLData } from './annotators/srlAnnotationService.js'
+import { isGreetingStale } from './chatbotPreferencesService.js'
 import {
     GREETING_NO_DATA_WITH_PROFILE,
     GREETING_NO_DATA_NO_PROFILE,
@@ -442,7 +443,8 @@ async function generateInitialGreeting(userId) {
             [sessionId]
         )
 
-        if (rows[0].initial_greeting && !isNew) {
+        const stale = await isGreetingStale(sessionId)
+        if (rows[0].initial_greeting && !isNew && !stale) {
             logger.chat(`Returning cached greeting`, {
                 userId,
                 sessionId,
@@ -454,6 +456,9 @@ async function generateInitialGreeting(userId) {
                 greeting: rows[0].initial_greeting,
                 sessionId
             }
+        }
+        if (stale) {
+            logger.chat(`Cached greeting is stale — regenerating`, { userId, sessionId })
         }
 
         // Check if user has SRL data - if not, return hardcoded message
@@ -475,9 +480,9 @@ async function generateInitialGreeting(userId) {
                 noDataGreeting = GREETING_NO_DATA_NO_PROFILE
             }
 
-            // Cache the greeting
+            // Cache the greeting (set greeting_generated_at for staleness detection)
             await pool.query(
-                `UPDATE public.chat_sessions SET initial_greeting = $1 WHERE id = $2`,
+                `UPDATE public.chat_sessions SET initial_greeting = $1, greeting_generated_at = NOW() WHERE id = $2`,
                 [noDataGreeting, sessionId]
             )
 
@@ -527,9 +532,9 @@ async function generateInitialGreeting(userId) {
         const greeting = cleanedGreeting
         logger.chat(`LLM greeting received`, { userId, greetingLength: greeting.length, passed: result.passed, embeddedSuggestions: embeddedSuggestions.length })
 
-        // Cache the cleaned greeting
+        // Cache the cleaned greeting (set greeting_generated_at for staleness detection)
         await pool.query(
-            `UPDATE public.chat_sessions SET initial_greeting = $1 WHERE id = $2`,
+            `UPDATE public.chat_sessions SET initial_greeting = $1, greeting_generated_at = NOW() WHERE id = $2`,
             [greeting, sessionId]
         )
 

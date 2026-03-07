@@ -284,6 +284,7 @@ const SleepSlider = ({ onSaved }: SleepSliderProps) => {
             setSavedEntry(entry)
             setEditMode(false)
             setSubmitMsg({ text: 'Sleep log saved!', type: 'success' })
+            window.dispatchEvent(new CustomEvent('chatbot:dataUpdated', { detail: { dataType: 'sleep' } }))
             onSaved?.()
         } catch {
             setSubmitMsg({ text: 'Network error', type: 'error' })
